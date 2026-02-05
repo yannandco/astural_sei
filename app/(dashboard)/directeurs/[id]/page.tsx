@@ -128,7 +128,7 @@ export default function DirecteurDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.lastName || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.lastName || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -136,7 +136,7 @@ export default function DirecteurDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.firstName || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.firstName || '-'}</div>
                     )}
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export default function DirecteurDetailPage() {
                     {isEditMode ? (
                       <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -154,7 +154,7 @@ export default function DirecteurDetailPage() {
                     {isEditMode ? (
                       <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.phone || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                     )}
                   </div>
                 </div>

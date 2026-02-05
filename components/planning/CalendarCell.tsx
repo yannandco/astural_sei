@@ -64,6 +64,7 @@ export default function CalendarCell({
         <div className={`flex flex-col ${compact ? 'items-start text-[10px] leading-tight w-full' : 'items-center'}`}>
           {compact ? (
             <>
+              <div className="truncate w-full text-gray-400 mb-0.5">Remplace</div>
               <div className="truncate w-full font-medium">
                 {affectation.collaborateurPrenom} {affectation.collaborateurNom?.toUpperCase()}
               </div>
@@ -89,12 +90,7 @@ export default function CalendarCell({
       return <XMarkIcon className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} mx-auto`} />
     }
 
-    // Disponible - montrer le checkmark (sauf vacances)
-    if ((status === 'disponible_recurrent' || status === 'disponible_specifique') && !isVacances) {
-      return <CheckIcon className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} mx-auto`} />
-    }
-
-    // Indisponible ou vacances - case vide
+    // Disponible ou indisponible ou vacances - case vide
     return null
   }
 
@@ -113,7 +109,7 @@ export default function CalendarCell({
       {showCreneauLabel && (
         <div className="text-xs text-gray-500 mb-1">{CRENEAU_LABELS[data.creneau]}</div>
       )}
-      <div className={`flex items-end ${compact ? 'justify-start h-[38px] pt-3' : 'justify-center min-h-[24px]'}`}>
+      <div className={`flex items-end ${compact ? 'justify-start h-[48px] pt-4' : 'justify-center min-h-[24px]'}`}>
         {renderContent()}
       </div>
     </div>

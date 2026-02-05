@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, and } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { titulaires, titulaireAffectations, titulaireRemplacements, ecoles, classes } from '@/lib/db/schema'
+import { titulaires, titulaireAffectations, titulaireRemplacements, ecoles, classes, collaborateurEcoles, collaborateurs } from '@/lib/db/schema'
 import { requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Titulaire non trouvé' }, { status: 404 })
     }
 
-    const affectations = await db
+    const rawAffectations = await db
       .select({
         id: titulaireAffectations.id,
         ecoleId: titulaireAffectations.ecoleId,
@@ -41,6 +41,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .leftJoin(classes, eq(titulaireAffectations.classeId, classes.id))
       .where(eq(titulaireAffectations.titulaireId, titulaireId))
       .orderBy(desc(titulaireAffectations.dateDebut))
+
+    // Pour chaque affectation, chercher le(s) collaborateur(s) intervenant(s) sur la même école
+    const affectations = await Promise.all(
+      rawAffectations.map(async (aff) => {
+        const intervenants = await db
+          .select({
+            collaborateurId: collaborateurs.id,
+            firstName: collaborateurs.firstName,
+            lastName: collaborateurs.lastName,
+          })
+          .from(collaborateurEcoles)
+          .innerJoin(collaborateurs, eq(collaborateurEcoles.collaborateurId, collaborateurs.id))
+          .where(and(
+            eq(collaborateurEcoles.ecoleId, aff.ecoleId),
+            eq(collaborateurEcoles.isActive, true)
+          ))
+
+        return {
+          ...aff,
+          intervenants,
+        }
+      })
+    )
 
     const remplacements = await db
       .select()

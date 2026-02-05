@@ -274,8 +274,9 @@ export default function PlanningPage() {
         <div className="p-5">
           {/* Sticky navigation bar */}
           <div className="sticky top-0 z-30 bg-white pb-2 -mx-5 px-5 pt-2 border-b border-gray-100">
-            {/* Tabs */}
-            <div className="flex gap-1 mb-3 p-1 bg-gray-100 rounded-lg w-fit">
+            {/* Tabs + Legend */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
               <button
                 type="button"
                 onClick={() => setViewMode('remplacants')}
@@ -300,6 +301,8 @@ export default function PlanningPage() {
                 <UsersIcon className="w-4 h-4" />
                 Collaborateurs
               </button>
+              </div>
+              <PlanningLegend greenLabel="Affecté à" />
             </div>
 
             {/* Week navigation */}
@@ -389,11 +392,9 @@ export default function PlanningPage() {
                               href={`/remplacants/${remplacant.id}`}
                               className="text-sm font-medium text-gray-900 hover:text-purple-600"
                             >
-                              {remplacant.lastName} {remplacant.firstName}
+                              <div>{remplacant.lastName}</div>
+                              <div>{remplacant.firstName}</div>
                             </Link>
-                            {!remplacant.isAvailable && (
-                              <span className="ml-2 text-xs text-gray-400">(indisponible)</span>
-                            )}
                           </td>
                           {weekDates.map((date) => {
                             const dateStr = formatDate(date)
@@ -425,8 +426,9 @@ export default function PlanningPage() {
                                     className={`py-1 px-1 ${STATUS_STYLES[status]} ${borderClass} ${todayLeftClass} ${todayRightClass}`}
                                     title={`Remplace ${affectation.collaborateurPrenom} ${affectation.collaborateurNom} - ${affectation.ecoleNom || ''}`}
                                   >
-                                    <div className="text-xs text-purple-700 font-medium leading-tight text-left">
-                                      <div className="truncate">
+                                    <div className="text-xs text-purple-700 leading-tight text-left">
+                                      <div className="truncate font-normal text-gray-400 mb-0.5">Remplace</div>
+                                      <div className="truncate font-medium">
                                         {affectation.collaborateurPrenom} {affectation.collaborateurNom?.toUpperCase()}
                                       </div>
                                       {affectation.ecoleNom && (
@@ -480,10 +482,6 @@ export default function PlanningPage() {
                   </table>
                 </div>
 
-                {/* Legend */}
-                <div className="mt-6">
-                  <PlanningLegend />
-                </div>
               </>
             )
           ) : (
@@ -554,7 +552,8 @@ export default function PlanningPage() {
                               href={`/collaborateurs/${collaborateur.id}`}
                               className="text-sm font-medium text-gray-900 hover:text-purple-600"
                             >
-                              {collaborateur.lastName} {collaborateur.firstName}
+                              <div>{collaborateur.lastName}</div>
+                              <div>{collaborateur.firstName}</div>
                             </Link>
                           </td>
                           {weekDates.map((date) => {
@@ -596,9 +595,10 @@ export default function PlanningPage() {
                                   >
                                     <Link
                                       href={`/remplacants/${remplacement.remplacantId}`}
-                                      className="text-xs text-purple-700 hover:text-purple-900 font-medium leading-tight block"
+                                      className="text-xs text-purple-700 hover:text-purple-900 leading-tight block"
                                     >
-                                      <div className="truncate">
+                                      <div className="truncate font-normal text-gray-400 mb-0.5">Est remplacé par</div>
+                                      <div className="truncate font-medium">
                                         {remplacement.remplacantPrenom} {remplacement.remplacantNom}
                                       </div>
                                       {remplacement.ecoleNom && (
@@ -618,9 +618,10 @@ export default function PlanningPage() {
                                     className={`py-1 px-1 bg-green-100 ${borderClass} ${todayLeftClass} ${todayRightClass}`}
                                     title={presenceEcoles.join(', ')}
                                   >
-                                    <div className="text-xs text-green-700 font-medium leading-tight">
+                                    <div className="text-xs text-green-700 leading-tight">
+                                      <div className="truncate text-gray-400 mb-0.5">Affecté à</div>
                                       {presenceEcoles.slice(0, 2).map((ecole, i) => (
-                                        <div key={i} className="truncate">
+                                        <div key={i} className="truncate font-medium">
                                           {ecole}
                                         </div>
                                       ))}
@@ -648,21 +649,6 @@ export default function PlanningPage() {
                   </table>
                 </div>
 
-                {/* Legend for collaborateurs */}
-                <div className="mt-6 text-xs text-gray-500 flex flex-wrap gap-4">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-green-100 border border-green-300"></span>
-                    Présence prévue
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-purple-100 border border-purple-300"></span>
-                    Remplacé
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200"></span>
-                    Non présent
-                  </span>
-                </div>
               </>
             )
           )}

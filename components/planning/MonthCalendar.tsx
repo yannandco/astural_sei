@@ -363,7 +363,7 @@ export default function MonthCalendar({
                   if (!date) {
                     return creneaux.map((creneau) => (
                       <td key={`${weekIndex}-${jour}-${creneau}`} className="p-0.5">
-                        <div className="h-[50px] bg-gray-50 rounded border border-gray-200"></div>
+                        <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
                   }

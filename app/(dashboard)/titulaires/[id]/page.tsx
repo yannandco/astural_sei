@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
 
-interface Affectation { id: number; ecoleId: number; classeId: number | null; dateDebut: string | null; dateFin: string | null; isActive: boolean; ecoleName: string | null; classeName: string | null }
+interface Intervenant { collaborateurId: number; firstName: string; lastName: string }
+interface Affectation { id: number; ecoleId: number; classeId: number | null; dateDebut: string | null; dateFin: string | null; isActive: boolean; ecoleName: string | null; classeName: string | null; intervenants: Intervenant[] }
 interface Remplacement { id: number; affectationId: number; titulaireOriginalId: number; remplacantTitulaireId: number; dateDebut: string; dateFin: string | null; motif: string | null }
 
 export default function TitulaireDetailPage() {
@@ -127,7 +128,7 @@ export default function TitulaireDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.lastName || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.lastName || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -135,7 +136,7 @@ export default function TitulaireDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.firstName || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.firstName || '-'}</div>
                     )}
                   </div>
                 </div>
@@ -145,7 +146,7 @@ export default function TitulaireDetailPage() {
                     {isEditMode ? (
                       <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -153,7 +154,7 @@ export default function TitulaireDetailPage() {
                     {isEditMode ? (
                       <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.phone || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                     )}
                   </div>
                 </div>
@@ -172,8 +173,7 @@ export default function TitulaireDetailPage() {
                       <tr>
                         <th className="ds-table-header-cell">École</th>
                         <th className="ds-table-header-cell">Classe</th>
-                        <th className="ds-table-header-cell">Début</th>
-                        <th className="ds-table-header-cell">Fin</th>
+                        <th className="ds-table-header-cell">Intervenant</th>
                         <th className="ds-table-header-cell">Statut</th>
                       </tr>
                     </thead>
@@ -182,8 +182,17 @@ export default function TitulaireDetailPage() {
                         <tr key={a.id} className="ds-table-row cursor-pointer hover:bg-purple-50" onClick={() => router.push(`/ecoles/${a.ecoleId}`)}>
                           <td className="ds-table-cell font-medium">{a.ecoleName || '-'}</td>
                           <td className="ds-table-cell">{a.classeName || '-'}</td>
-                          <td className="ds-table-cell">{a.dateDebut || '-'}</td>
-                          <td className="ds-table-cell">{a.dateFin || '-'}</td>
+                          <td className="ds-table-cell text-gray-500">
+                            {a.intervenants && a.intervenants.length > 0
+                              ? a.intervenants.map((i, idx) => (
+                                  <div key={idx}>
+                                    <Link href={`/collaborateurs/${i.collaborateurId}`} className="hover:text-purple-600" onClick={(e) => e.stopPropagation()}>
+                                      {i.firstName} {i.lastName?.toUpperCase()}
+                                    </Link>
+                                  </div>
+                                ))
+                              : '-'}
+                          </td>
                           <td className="ds-table-cell">
                             <span className={a.isActive ? 'status-badge-success' : 'status-badge-gray'}>{a.isActive ? 'Actif' : 'Inactif'}</span>
                           </td>

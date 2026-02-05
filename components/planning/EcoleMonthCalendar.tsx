@@ -292,7 +292,7 @@ export default function EcoleMonthCalendar({ ecoleId }: EcoleMonthCalendarProps)
                   if (!date) {
                     return creneaux.map((creneau) => (
                       <td key={`${weekIndex}-${jour}-${creneau}`} className="p-0.5">
-                        <div className="h-[50px] bg-gray-50 rounded border border-gray-200"></div>
+                        <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
                   }
@@ -330,7 +330,7 @@ export default function EcoleMonthCalendar({ ecoleId }: EcoleMonthCalendarProps)
                           )}
                           <div
                             className={`
-                              h-[50px] rounded border flex flex-col justify-end items-start pt-4 pb-1 px-1
+                              h-[60px] rounded border flex flex-col justify-end items-start pt-4 pb-1 px-1
                               ${bgColor} ${textColor}
                             `}
                             title={

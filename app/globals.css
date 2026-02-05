@@ -348,7 +348,7 @@
   }
 
   .form-label {
-    @apply block text-sm font-semibold mb-2;
+    @apply block text-sm font-semibold mb-0;
     color: var(--color-text-secondary);
   }
 

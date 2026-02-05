@@ -6,7 +6,7 @@ Gestion du calendrier et de la planification des remplaçants : disponibilités 
 ## Concepts clés
 
 ### Granularité temporelle
-- **Jours** : Lundi à Vendredi uniquement
+- **Jours** : Lundi, Mardi, Jeudi, Vendredi (mercredi masqué)
 - **Créneaux** : Matin / Après-midi / Journée complète
 - **Périodes** : Plages de dates avec patterns de récurrence
 
@@ -104,6 +104,10 @@ Gestion du calendrier et de la planification des remplaçants : disponibilités 
 - `GET /api/planning?startDate=X&endDate=Y` — Vue tous remplaçants (avec périodes)
 - `GET /api/planning/collaborateurs?startDate=X&endDate=Y` — Vue collaborateurs remplacés
 
+### Planning par entité
+- `GET /api/collaborateurs/:id/planning?startDate=X&endDate=Y` — Planning d'un collaborateur
+- `GET /api/ecoles/:id/planning?month=YYYY-MM` — Planning d'une école
+
 ### Vacances scolaires
 - `GET /api/vacances-scolaires?startDate=X&endDate=Y` — Liste des vacances/fériés
 - `POST /api/vacances-scolaires` — Forcer mise à jour depuis OpenHolidays API
@@ -113,24 +117,47 @@ Gestion du calendrier et de la planification des remplaçants : disponibilités 
 ### Composants (`components/planning/`)
 | Composant | Description |
 |-----------|-------------|
+| `MonthCalendar` | Calendrier mensuel remplaçant (matin/AM côte à côte) |
+| `CollaborateurMonthCalendar` | Calendrier mensuel collaborateur |
+| `EcoleMonthCalendar` | Calendrier mensuel école |
+| `CollaborateurPlanning` | Planning semaine collaborateur |
 | `WeekCalendar` | Grille calendrier semaine (Lu-Ve) |
 | `WeekNavigation` | Navigation ← Semaine → |
 | `RecurringAvailabilityEditor` | Gestion des périodes et récurrences |
 | `PeriodeModal` | Modal création/édition de période |
-| `CalendarCell` | Cellule individuelle |
+| `CalendarCell` | Cellule individuelle (compact pour calendriers mensuels) |
 | `CellContextMenu` | Menu contextuel au clic |
 | `AssignmentModal` | Modal création affectation |
 | `SpecificDateModal` | Modal ajout disponibilité/exception |
 | `PlanningLegend` | Légende des couleurs |
+| `types.ts` | Types partagés, helpers (getWeekDates, formatDate, JOURS_CALENDRIER) |
 
 ### Page Planning (`/planning`)
-Vue globale avec deux onglets :
-1. **Remplaçants** : Tous les remplaçants avec leurs disponibilités
-2. **Collaborateurs** : Collaborateurs ayant des remplacements prévus
+Vue globale hebdomadaire avec deux onglets :
+1. **Remplaçants** : Tous les remplaçants avec disponibilités et infos complètes (noms, écoles) dans les cellules
+2. **Collaborateurs** : Collaborateurs avec présences et remplacements
+
+Features :
+- Navigation semaine avec préservation du scroll
+- Colonnes matin/après-midi côte à côte pour chaque jour
+- Mercredi masqué (`JOURS_CALENDRIER` = Lu, Ma, Je, Ve)
+- Header sticky avec onglets et navigation
+- Hover outline sur les lignes
+- Bordures extérieures pour la colonne du jour actuel
+- Colonnes de même largeur (`table-fixed`)
+
+### Calendriers mensuels (sous-pages Planning)
+Chaque fiche détail (collaborateur, remplaçant, école) a un onglet "Planning" avec un calendrier mensuel :
+- Matin et après-midi côte à côte sur une même ligne
+- Cellules de hauteur uniforme (50px)
+- Numéro de jour en haut à gauche de la cellule matin
+- Numéro de semaine à gauche
+- Navigation mois ← → avec bouton "Aujourd'hui"
+- Infos complètes dans les cellules (noms, écoles)
 
 ### Fiche Remplaçant — Section Planning
 - Éditeur de périodes de disponibilité (liste de périodes avec grille de récurrences)
-- Calendrier semaine interactif
+- Calendrier mensuel interactif avec menu contextuel
 - Liste des affectations
 
 ### Codes couleur (Tailwind)

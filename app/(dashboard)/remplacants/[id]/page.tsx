@@ -434,7 +434,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <input type="text" required value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.lastName || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.lastName || '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -442,7 +442,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <input type="text" required value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.firstName || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.firstName || '-'}</div>
                         )}
                       </div>
                     </div>
@@ -451,7 +451,7 @@ export default function RemplacantDetailPage() {
                       {isEditMode ? (
                         <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.address || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.address || '-'}</div>
                       )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -460,7 +460,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.phone || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -468,7 +468,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                         )}
                       </div>
                     </div>
@@ -478,7 +478,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <DatePicker value={formData.contractStartDate} onChange={(value) => updateField('contractStartDate', value)} />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.contractStartDate ? new Date(formData.contractStartDate).toLocaleDateString('fr-FR') : '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.contractStartDate ? new Date(formData.contractStartDate).toLocaleDateString('fr-FR') : '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -486,7 +486,7 @@ export default function RemplacantDetailPage() {
                         {isEditMode ? (
                           <DatePicker value={formData.contractEndDate} onChange={(value) => updateField('contractEndDate', value)} />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.contractEndDate ? new Date(formData.contractEndDate).toLocaleDateString('fr-FR') : '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.contractEndDate ? new Date(formData.contractEndDate).toLocaleDateString('fr-FR') : '-'}</div>
                         )}
                       </div>
                     </div>
@@ -495,7 +495,7 @@ export default function RemplacantDetailPage() {
                       {isEditMode ? (
                         <textarea value={formData.obsTemporaire} onChange={(e) => updateField('obsTemporaire', e.target.value)} className="form-input" rows={2} />
                       ) : (
-                        <div className="py-2 text-gray-900 whitespace-pre-wrap">{formData.obsTemporaire || '-'}</div>
+                        <div className="py-0.5 text-gray-900 whitespace-pre-wrap">{formData.obsTemporaire || '-'}</div>
                       )}
                     </div>
                   </div>

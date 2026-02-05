@@ -245,7 +245,7 @@ export default function EtablissementDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.name || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.name || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -253,7 +253,7 @@ export default function EtablissementDetailPage() {
                     {isEditMode ? (
                       <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.address || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.address || '-'}</div>
                     )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -262,7 +262,7 @@ export default function EtablissementDetailPage() {
                       {isEditMode ? (
                         <input type="text" value={formData.postalCode} onChange={(e) => updateField('postalCode', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.postalCode || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.postalCode || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -270,7 +270,7 @@ export default function EtablissementDetailPage() {
                       {isEditMode ? (
                         <input type="text" value={formData.city} onChange={(e) => updateField('city', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.city || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.city || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -280,7 +280,7 @@ export default function EtablissementDetailPage() {
                       {isEditMode ? (
                         <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.phone || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -288,7 +288,7 @@ export default function EtablissementDetailPage() {
                       {isEditMode ? (
                         <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -377,7 +377,7 @@ export default function EtablissementDetailPage() {
                       </p>
                     </>
                   ) : (
-                    <div className="py-2 text-gray-900">{getDirecteurName()}</div>
+                    <div className="py-0.5 text-gray-900">{getDirecteurName()}</div>
                   )}
                 </div>
               </div>

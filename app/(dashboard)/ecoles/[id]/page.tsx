@@ -26,6 +26,8 @@ interface CollaborateurAffecte {
   isActive: boolean
 }
 
+type TabType = 'informations' | 'planning'
+
 export default function EcoleDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -34,6 +36,7 @@ export default function EcoleDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabType>('informations')
   const [directeurs, setDirecteurs] = useState<Directeur[]>([])
   const [classesList, setClassesList] = useState<Classe[]>([])
   const [titulairesList, setTitulairesList] = useState<TitulaireAffecte[]>([])
@@ -209,6 +212,35 @@ export default function EcoleDetailPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="flex gap-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('informations')}
+            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'informations'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Informations
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('planning')}
+            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'planning'
+                ? 'border-purple-600 text-purple-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Planning
+          </button>
+        </nav>
+      </div>
+
+      {activeTab === 'informations' && (
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_440px] gap-10">
           {/* Left */}
@@ -222,7 +254,7 @@ export default function EcoleDetailPage() {
                     {isEditMode ? (
                       <input type="text" required value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.name || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.name || '-'}</div>
                     )}
                   </div>
                   <div className="form-group">
@@ -230,7 +262,7 @@ export default function EcoleDetailPage() {
                     {isEditMode ? (
                       <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-2 text-gray-900">{formData.address || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.address || '-'}</div>
                     )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -239,7 +271,7 @@ export default function EcoleDetailPage() {
                       {isEditMode ? (
                         <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.phone || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -247,7 +279,7 @@ export default function EcoleDetailPage() {
                       {isEditMode ? (
                         <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -269,7 +301,7 @@ export default function EcoleDetailPage() {
                       ))}
                     </select>
                   ) : (
-                    <div className="py-2 text-gray-900">{getDirecteurName()}</div>
+                    <div className="py-0.5 text-gray-900">{getDirecteurName()}</div>
                   )}
                 </div>
               </div>
@@ -361,18 +393,6 @@ export default function EcoleDetailPage() {
               </div>
             </div>
 
-            {/* Planning */}
-            <div className="ds-table-container">
-              <div className="p-5">
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
-                  <CalendarDaysIcon className="w-5 h-5 text-purple-600" />
-                  <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider">
-                    Planning
-                  </h2>
-                </div>
-                <EcoleMonthCalendar ecoleId={parseInt(id)} />
-              </div>
-            </div>
           </div>
 
           {/* Right */}
@@ -415,6 +435,15 @@ export default function EcoleDetailPage() {
           </div>
         )}
       </form>
+      )}
+
+      {activeTab === 'planning' && (
+        <div className="ds-table-container">
+          <div className="p-5">
+            <EcoleMonthCalendar ecoleId={parseInt(id)} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

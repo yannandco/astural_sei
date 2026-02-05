@@ -61,7 +61,7 @@ await requireRole(['admin'])  // POST/PATCH/DELETE
 - Schema: `lib/db/schema/collaborateurs.ts`, `sectors.ts`, `contacts.ts`, `enums.ts`
 - API: `/api/collaborateurs`, `/api/collaborateurs/[id]`, `/api/collaborateurs/import`
 - API: `/api/sectors`, `/api/contact-types`, `/api/contact-types/[id]`
-- UI: `/collaborateurs` (liste + modal création), `/collaborateurs/[id]` (détail/édition)
+- UI: `/collaborateurs` (liste + modal création), `/collaborateurs/[id]` (détail/édition avec onglets Informations/Planning)
 - UI: `/collaborateurs/import` (import Excel)
 
 ### Module 1b — Remplaçants
@@ -74,12 +74,13 @@ await requireRole(['admin'])  // POST/PATCH/DELETE
   - `/api/remplacants/[id]/remarques`
   - `/api/remplacants/[id]/observateurs`
   - `/api/remplacants/import` (import Excel avec preview)
+  - `/api/remplacants/import-disponibilites` (import disponibilités Excel)
 - UI:
-  - `/remplacants` — liste avec filtres (disponibilité, statut), tri
-  - `/remplacants/[id]` — détail/édition, remarques, observateurs (recherche par nom)
+  - `/remplacants` — liste avec filtres (disponibilité, statut), tri, colonnes: Nom, Contact, Statut
+  - `/remplacants/[id]` — détail/édition avec onglets Informations/Planning, remarques, observateurs
   - `/remplacants/new` — création
   - `/remplacants/import` — import Excel (feuille "Liste rempl.")
-- Import Excel colonnes: Noms (parsing "Prénom NOM" → nom en MAJUSCULES), Adresse, Téléphone, Email, Disponible période actuelle, Remarques, Contrat horaire du, fin contrat horaire, Obs
+  - `/remplacants/import-disponibilites` — import disponibilités depuis Excel
 
 ### Module 2 — Établissements, Écoles, Classes, Directeurs, Titulaires (v0.2.0)
 - Schema: `lib/db/schema/etablissements.ts` — 9 tables:
@@ -89,21 +90,38 @@ await requireRole(['admin'])  // POST/PATCH/DELETE
   - `directeurRemplacements`, `titulaireRemplacements`
 - API CRUD:
   - `/api/etablissements` + `/api/etablissements/[id]`
-  - `/api/ecoles` + `/api/ecoles/[id]`
+  - `/api/ecoles` + `/api/ecoles/[id]` + `/api/ecoles/[id]/planning`
   - `/api/classes` + `/api/classes/[id]`
   - `/api/directeurs` + `/api/directeurs/[id]` + `/api/directeurs/[id]/remplacements`
-  - `/api/titulaires` + `/api/titulaires/[id]` + `/api/titulaires/[id]/affectations` + `/api/titulaires/[id]/remplacements`
-  - `/api/collaborateurs/[id]/ecoles`
+  - `/api/titulaires` + `/api/titulaires/[id]` (avec intervenants) + `/api/titulaires/[id]/affectations` + `/api/titulaires/[id]/remplacements`
+  - `/api/collaborateurs/[id]/ecoles` + `/api/collaborateurs/[id]/planning`
   - `/api/docs` + `/api/docs/[...path]` (sert CHANGELOG.md et .specify/)
 - UI:
   - `/etablissements` — liste avec filtres, modal création
   - `/etablissements/[id]` — détail + section écoles avec ajout école (modal)
-  - `/ecoles/[id]` — détail, dropdown directeur, ajout classes inline
-  - `/directeurs` — liste + modal création
+  - `/ecoles/[id]` — détail avec onglets Informations/Planning, dropdown directeur, ajout classes inline
+  - `/directeurs` — liste (colonnes: Nom, Email, Établissement, École, Statut)
   - `/directeurs/[id]` — détail, écoles actuelles, historique remplacements
-  - `/titulaires` — liste + modal création
-  - `/titulaires/[id]` — détail, affectations, historique remplacements
+  - `/titulaires` — liste (colonnes: Nom, Email, Établissement, École, Statut)
+  - `/titulaires/[id]` — détail, affectations avec colonne Intervenant, historique remplacements
   - `/documentation` — arborescence fichiers MD + rendu markdown
+
+### Module 3 — Planning (v0.3.0)
+- Schema: `lib/db/schema/planning.ts` — 5 tables:
+  - `remplacantDisponibilitesPeriodes`, `remplacantDisponibilitesRecurrentes`
+  - `remplacantDisponibilitesSpecifiques`, `remplacantAffectations`
+  - `vacancesScolairesCache`
+- API:
+  - `/api/planning` — Vue globale remplaçants
+  - `/api/planning/collaborateurs` — Vue collaborateurs
+  - `/api/remplacants/[id]/disponibilites/periodes` + `/recurrentes` + `/specifiques`
+  - `/api/remplacants/[id]/affectations`
+  - `/api/vacances-scolaires`
+- UI:
+  - `/planning` — Vue hebdomadaire avec onglets Remplaçants/Collaborateurs
+  - Calendriers mensuels dans les onglets Planning de chaque fiche (collaborateur, remplaçant, école)
+- Composants: `components/planning/` (MonthCalendar, CollaborateurMonthCalendar, EcoleMonthCalendar, CalendarCell, etc.)
+- Features: mercredi masqué, matin/AM côte à côte, cellules 50px, infos complètes dans cellules, today highlighting
 
 ## Sidebar navigation (layout.tsx)
 3 sections :

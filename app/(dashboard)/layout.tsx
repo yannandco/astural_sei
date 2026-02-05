@@ -31,7 +31,7 @@ type NavSection = { label: string; items: NavItem[] }
 
 const navigationSections: NavSection[] = [
   {
-    label: 'Personnel',
+    label: 'SEI',
     items: [
       { id: 'collaborateurs', name: 'Collaborateurs', href: '/collaborateurs', icon: UsersIcon },
       { id: 'remplacants', name: 'Remplaçants', href: '/remplacants', icon: UserGroupIcon },
@@ -39,7 +39,7 @@ const navigationSections: NavSection[] = [
     ],
   },
   {
-    label: 'Structure',
+    label: 'Établissements',
     items: [
       { id: 'etablissements', name: 'Établissements', href: '/etablissements', icon: BuildingOffice2Icon },
       { id: 'ecoles', name: 'Écoles', href: '/ecoles', icon: AcademicCapIcon },

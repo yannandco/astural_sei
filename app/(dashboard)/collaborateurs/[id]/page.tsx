@@ -487,7 +487,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="text" required value={formData.lastName} onChange={(e) => updateField('lastName', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.lastName || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.lastName || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -495,7 +495,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="text" required value={formData.firstName} onChange={(e) => updateField('firstName', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.firstName || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.firstName || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -507,7 +507,7 @@ export default function CollaborateurDetailPage() {
                           <option value="F">Féminin</option>
                         </select>
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.sexe === 'M' ? 'Masculin' : formData.sexe === 'F' ? 'Féminin' : '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.sexe === 'M' ? 'Masculin' : formData.sexe === 'F' ? 'Féminin' : '-'}</div>
                       )}
                     </div>
                   </div>
@@ -524,7 +524,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.email || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.email || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -532,7 +532,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="tel" value={formData.mobilePro} onChange={(e) => updateField('mobilePro', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.mobilePro || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.mobilePro || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -549,7 +549,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.address || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.address || '-'}</div>
                       )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -558,7 +558,7 @@ export default function CollaborateurDetailPage() {
                         {isEditMode ? (
                           <input type="text" value={formData.postalCode} onChange={(e) => updateField('postalCode', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.postalCode || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.postalCode || '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -566,7 +566,7 @@ export default function CollaborateurDetailPage() {
                         {isEditMode ? (
                           <input type="text" value={formData.city} onChange={(e) => updateField('city', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.city || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.city || '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -574,7 +574,7 @@ export default function CollaborateurDetailPage() {
                         {isEditMode ? (
                           <input type="text" value={formData.canton} onChange={(e) => updateField('canton', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.canton || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.canton || '-'}</div>
                         )}
                       </div>
                       <div className="form-group">
@@ -582,7 +582,7 @@ export default function CollaborateurDetailPage() {
                         {isEditMode ? (
                           <input type="text" value={formData.pays} onChange={(e) => updateField('pays', e.target.value)} className="form-input" />
                         ) : (
-                          <div className="py-2 text-gray-900">{formData.pays || '-'}</div>
+                          <div className="py-0.5 text-gray-900">{formData.pays || '-'}</div>
                         )}
                       </div>
                     </div>
@@ -608,7 +608,7 @@ export default function CollaborateurDetailPage() {
                           ))}
                         </select>
                       ) : (
-                        <div className="py-2 text-gray-900">{getSectorName(formData.secteurId)}</div>
+                        <div className="py-0.5 text-gray-900">{getSectorName(formData.secteurId)}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -621,7 +621,7 @@ export default function CollaborateurDetailPage() {
                           <option value="Mixte">Mixte</option>
                         </select>
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.contratType || '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.contratType || '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -629,7 +629,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <input type="number" step="0.01" min="0" max="100" value={formData.taux} onChange={(e) => updateField('taux', e.target.value)} className="form-input" />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.taux ? `${formData.taux}%` : '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.taux ? `${formData.taux}%` : '-'}</div>
                       )}
                     </div>
                     <div className="form-group">
@@ -637,7 +637,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <textarea value={formData.contratDetails} onChange={(e) => updateField('contratDetails', e.target.value)} className="form-textarea" rows={2} />
                       ) : (
-                        <div className="py-2 text-gray-900 whitespace-pre-wrap">{formData.contratDetails || '-'}</div>
+                        <div className="py-0.5 text-gray-900 whitespace-pre-wrap">{formData.contratDetails || '-'}</div>
                       )}
                     </div>
                   </div>
@@ -654,7 +654,7 @@ export default function CollaborateurDetailPage() {
                       {isEditMode ? (
                         <DatePicker value={formData.dateSortie} onChange={(value) => updateField('dateSortie', value)} />
                       ) : (
-                        <div className="py-2 text-gray-900">{formData.dateSortie ? new Date(formData.dateSortie).toLocaleDateString('fr-FR') : '-'}</div>
+                        <div className="py-0.5 text-gray-900">{formData.dateSortie ? new Date(formData.dateSortie).toLocaleDateString('fr-FR') : '-'}</div>
                       )}
                     </div>
                     <div className="form-group">

@@ -101,7 +101,7 @@ export default function TitulairesPage() {
           <table className="ds-table">
             <thead className="ds-table-header">
               <tr>
-                {([['lastName', 'Nom'], ['email', 'Email'], ['isActive', 'Statut']] as [SortKey, string][]).map(([key, label]) => (
+                {([['lastName', 'Nom'], ['email', 'Email']] as [SortKey, string][]).map(([key, label]) => (
                   <th key={key} className="ds-table-header-cell cursor-pointer select-none hover:text-purple-700 transition-colors" onClick={() => toggleSort(key)}>
                     <span className="inline-flex items-center gap-1">
                       {label}
@@ -111,6 +111,12 @@ export default function TitulairesPage() {
                 ))}
                 <th className="ds-table-header-cell">Établissement</th>
                 <th className="ds-table-header-cell">École</th>
+                <th className="ds-table-header-cell cursor-pointer select-none hover:text-purple-700 transition-colors" onClick={() => toggleSort('isActive')}>
+                  <span className="inline-flex items-center gap-1">
+                    Statut
+                    {sortKey === 'isActive' ? (sortDir === 'asc' ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />) : <span className="w-3.5" />}
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="ds-table-body">
@@ -118,9 +124,6 @@ export default function TitulairesPage() {
                 <tr key={item.id} className="ds-table-row cursor-pointer hover:bg-purple-50 transition-colors" onClick={() => router.push(`/titulaires/${item.id}`)}>
                   <td className="ds-table-cell font-medium text-gray-900">{item.lastName?.toUpperCase()} {item.firstName}</td>
                   <td className="ds-table-cell text-gray-500">{item.email || '-'}</td>
-                  <td className="ds-table-cell">
-                    <span className={item.isActive ? 'status-badge-success' : 'status-badge-gray'}>{item.isActive ? 'Actif' : 'Inactif'}</span>
-                  </td>
                   <td className="ds-table-cell text-gray-500">
                     {item.affectations.length > 0
                       ? [...new Set(item.affectations.map(a => a.etablissementName).filter(Boolean))].join(', ') || '-'
@@ -130,6 +133,9 @@ export default function TitulairesPage() {
                     {item.affectations.length > 0
                       ? [...new Set(item.affectations.map(a => a.ecoleName).filter(Boolean))].map((name, i) => <div key={i}>{name}</div>)
                       : '-'}
+                  </td>
+                  <td className="ds-table-cell">
+                    <span className={item.isActive ? 'status-badge-success' : 'status-badge-gray'}>{item.isActive ? 'Actif' : 'Inactif'}</span>
                   </td>
                 </tr>
               ))}

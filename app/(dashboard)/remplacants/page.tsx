@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { PlusIcon, UserGroupIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, UserGroupIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 interface Remplacant {
   id: number
@@ -130,7 +130,7 @@ export default function RemplacantsPage() {
           <table className="ds-table">
             <thead className="ds-table-header">
               <tr>
-                {([['lastName', 'Nom'], ['email', 'Contact'], ['isAvailable', 'Disponible'], ['isActive', 'Statut']] as [SortKey, string][]).map(([key, label]) => (
+                {([['lastName', 'Nom'], ['email', 'Contact'], ['isActive', 'Statut']] as [SortKey, string][]).map(([key, label]) => (
                   <th key={key} className="ds-table-header-cell cursor-pointer select-none hover:text-purple-700 transition-colors" onClick={() => toggleSort(key)}>
                     <span className="inline-flex items-center gap-1">
                       {label}
@@ -138,7 +138,6 @@ export default function RemplacantsPage() {
                     </span>
                   </th>
                 ))}
-                <th className="ds-table-header-cell">Contrat</th>
               </tr>
             </thead>
             <tbody className="ds-table-body">
@@ -150,23 +149,7 @@ export default function RemplacantsPage() {
                     <div className="text-xs text-gray-400">{item.phone || ''}</div>
                   </td>
                   <td className="ds-table-cell">
-                    {item.isAvailable ? (
-                      <span className="inline-flex items-center gap-1 text-green-600">
-                        <CheckCircleIcon className="w-4 h-4" /> Oui
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-gray-400">
-                        <XCircleIcon className="w-4 h-4" /> Non
-                      </span>
-                    )}
-                  </td>
-                  <td className="ds-table-cell">
                     <span className={item.isActive ? 'status-badge-success' : 'status-badge-gray'}>{item.isActive ? 'Actif' : 'Inactif'}</span>
-                  </td>
-                  <td className="ds-table-cell text-gray-500 text-sm">
-                    {item.contractStartDate || item.contractEndDate
-                      ? `${item.contractStartDate ? new Date(item.contractStartDate).toLocaleDateString('fr-FR') : '?'} → ${item.contractEndDate ? new Date(item.contractEndDate).toLocaleDateString('fr-FR') : '?'}`
-                      : '-'}
                   </td>
                 </tr>
               ))}

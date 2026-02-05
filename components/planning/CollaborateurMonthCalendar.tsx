@@ -245,7 +245,7 @@ export default function CollaborateurMonthCalendar({
                   if (!date) {
                     return creneaux.map((creneau) => (
                       <td key={`${weekIndex}-${jour}-${creneau}`} className="p-0.5">
-                        <div className="h-[50px] bg-gray-50 rounded border border-gray-200"></div>
+                        <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
                   }
@@ -283,7 +283,7 @@ export default function CollaborateurMonthCalendar({
                           )}
                           <div
                             className={`
-                              h-[50px] rounded border flex flex-col justify-end items-start pt-4 pb-1 px-1
+                              h-[60px] rounded border flex flex-col justify-end items-start pt-4 pb-1 px-1
                               ${bgColor} ${textColor}
                             `}
                             title={
@@ -297,9 +297,10 @@ export default function CollaborateurMonthCalendar({
                             {remplacement ? (
                               <Link
                                 href={`/remplacants/${remplacement.remplacantId}`}
-                                className="text-[10px] font-medium hover:underline leading-tight block w-full text-left"
+                                className="text-[10px] hover:underline leading-tight block w-full text-left"
                               >
-                                <div className="truncate">
+                                <div className="truncate text-gray-400 mb-0.5">Est remplacé par</div>
+                                <div className="truncate font-medium">
                                   {remplacement.remplacantPrenom} {remplacement.remplacantNom?.toUpperCase()}
                                 </div>
                                 {remplacement.ecoleNom && (
