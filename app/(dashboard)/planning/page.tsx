@@ -9,12 +9,14 @@ import {
   DisponibilitePeriode,
   DisponibiliteSpecifique,
   Affectation,
+  AbsenceData,
   VacancesScolaires,
   JourSemaine,
   Creneau,
   CellStatus,
   JOUR_LABELS,
   CRENEAU_LABELS,
+  MOTIF_LABELS,
   getWeekDates,
   formatDate,
   calculateCellStatusWithPeriodes,
@@ -31,6 +33,7 @@ interface RemplacantPlanning {
   periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
+  absences: AbsenceData[]
 }
 
 interface JourPresence {
@@ -59,12 +62,23 @@ interface CollaborateurRemplacement {
   motif: string | null
 }
 
+interface CollaborateurAbsence {
+  id: number
+  collaborateurId: number | null
+  dateDebut: string
+  dateFin: string
+  creneau: Creneau
+  motif: string
+  motifDetails: string | null
+}
+
 interface CollaborateurPlanning {
   id: number
   lastName: string
   firstName: string
   presences: CollaborateurPresence[]
   remplacements: CollaborateurRemplacement[]
+  absences: CollaborateurAbsence[]
 }
 
 const STATUS_STYLES: Record<CellStatus, string> = {
@@ -73,6 +87,8 @@ const STATUS_STYLES: Record<CellStatus, string> = {
   disponible_specifique: 'bg-green-200 text-green-800',
   indisponible_exception: 'bg-red-100 text-red-700',
   affecte: 'bg-purple-100 text-purple-700',
+  absent_non_remplace: 'bg-red-200 text-red-800',
+  absent_remplace: 'bg-orange-100 text-orange-700',
 }
 
 export default function PlanningPage() {
@@ -180,15 +196,17 @@ export default function PlanningPage() {
     (remplacant: RemplacantPlanning, date: string, creneau: Creneau): {
       status: CellStatus
       affectation?: Affectation
+      absence?: AbsenceData
     } => {
-      const { status, affectation } = calculateCellStatusWithPeriodes(
+      const { status, affectation, absence } = calculateCellStatusWithPeriodes(
         date,
         creneau,
         remplacant.periodes,
         remplacant.specifiques,
-        remplacant.affectations
+        remplacant.affectations,
+        remplacant.absences?.length > 0 ? remplacant.absences : undefined
       )
-      return { status, affectation }
+      return { status, affectation, absence }
     },
     []
   )
@@ -196,10 +214,23 @@ export default function PlanningPage() {
   // Obtenir le statut d'une cellule pour un collaborateur
   const getCollaborateurCellStatus = useCallback(
     (collaborateur: CollaborateurPlanning, date: string, creneau: Creneau, jour: JourSemaine): {
-      status: 'none' | 'presence' | 'remplace'
+      status: 'none' | 'presence' | 'remplace' | 'absent'
       remplacement?: CollaborateurRemplacement
       presenceEcoles?: string[]
+      absence?: CollaborateurAbsence
     } => {
+      // Vérifier d'abord les absences (priorité maximale)
+      if (collaborateur.absences) {
+        const absence = collaborateur.absences.find((a) => {
+          const isInDateRange = date >= a.dateDebut && date <= a.dateFin
+          const isMatchingCreneau = a.creneau === creneau || a.creneau === 'journee'
+          return isInDateRange && isMatchingCreneau
+        })
+        if (absence) {
+          return { status: 'absent', absence }
+        }
+      }
+
       // Vérifier d'abord s'il y a un remplacement
       const remplacement = collaborateur.remplacements.find((r) => {
         const isInDateRange = date >= r.dateDebut && date <= r.dateFin
@@ -302,7 +333,7 @@ export default function PlanningPage() {
                 Collaborateurs
               </button>
               </div>
-              <PlanningLegend greenLabel="Affecté à" />
+              <PlanningLegend greenLabel="Affecté à" showAbsences />
             </div>
 
             {/* Week navigation */}
@@ -401,7 +432,7 @@ export default function PlanningPage() {
                             const isToday = formatDate(new Date()) === dateStr
                             const { isVacances } = isDateInVacances(dateStr)
                             return creneaux.map((creneau) => {
-                              const { status, affectation } = getCellStatus(remplacant, dateStr, creneau)
+                              const { status, affectation, absence } = getCellStatus(remplacant, dateStr, creneau)
                               const borderClass = creneau === 'apres_midi' ? 'border-r border-gray-300' : ''
                               const todayLeftClass = isToday && creneau === 'matin' ? 'border-l-2 border-l-purple-400' : ''
                               const todayRightClass = isToday && creneau === 'apres_midi' ? 'border-r-2 border-r-purple-400' : ''
@@ -414,6 +445,26 @@ export default function PlanningPage() {
                                     className={`py-1 px-1 text-center bg-yellow-50 text-yellow-400 ${borderClass} ${todayLeftClass} ${todayRightClass}`}
                                   >
                                     <span className="text-xs">-</span>
+                                  </td>
+                                )
+                              }
+
+                              // Absent
+                              if ((status === 'absent_non_remplace' || status === 'absent_remplace') && absence) {
+                                return (
+                                  <td
+                                    key={`${dateStr}-${creneau}`}
+                                    className={`py-1 px-1 ${STATUS_STYLES[status]} ${borderClass} ${todayLeftClass} ${todayRightClass}`}
+                                    title={`Absent - ${MOTIF_LABELS[absence.motif] || absence.motif}${absence.isRemplacee ? ' (remplacé)' : ''}`}
+                                  >
+                                    <div className="text-xs leading-tight text-left">
+                                      <div className="truncate font-medium">
+                                        {MOTIF_LABELS[absence.motif] || absence.motif}
+                                      </div>
+                                      {absence.isRemplacee && (
+                                        <div className="truncate opacity-75">Remplacé</div>
+                                      )}
+                                    </div>
                                   </td>
                                 )
                               }
@@ -579,12 +630,31 @@ export default function PlanningPage() {
                                 )
                               }
 
-                              const { status, remplacement, presenceEcoles } = getCollaborateurCellStatus(
+                              const { status, remplacement, presenceEcoles, absence } = getCollaborateurCellStatus(
                                 collaborateur,
                                 dateStr,
                                 creneau,
                                 jour as JourSemaine
                               )
+
+                              if (status === 'absent' && absence) {
+                                return (
+                                  <td
+                                    key={`${dateStr}-${creneau}`}
+                                    className={`py-1 px-1 bg-red-200 text-red-800 ${borderClass} ${todayLeftClass} ${todayRightClass}`}
+                                    title={`Absent - ${MOTIF_LABELS[absence.motif] || absence.motif}`}
+                                  >
+                                    <div className="text-xs leading-tight text-left">
+                                      <div className="truncate font-medium">
+                                        {MOTIF_LABELS[absence.motif] || absence.motif}
+                                      </div>
+                                      {absence.motifDetails && (
+                                        <div className="truncate opacity-75">{absence.motifDetails}</div>
+                                      )}
+                                    </div>
+                                  </td>
+                                )
+                              }
 
                               if (status === 'remplace' && remplacement) {
                                 return (

@@ -1,6 +1,8 @@
 import { pgTable, integer, uuid, varchar, text, boolean, timestamp, date, index } from 'drizzle-orm/pg-core'
 import { users } from './auth'
 import { collaborateurs } from './collaborateurs'
+import { ecoles } from './etablissements'
+import { observateurTypeEnum, creneauEnum } from './enums'
 
 // ─── Remplaçants ──────────────────────────────────────────────
 
@@ -47,21 +49,32 @@ export const remplacantRemarques = pgTable('remplacant_remarques', {
   index('remplacant_remarques_created_at_idx').on(table.createdAt),
 ])
 
-// ─── Observateurs (collaborateurs qui suivent le remplaçant) ──
+// ─── Séances d'observation ────────────────────────────────────
 
-export const remplacantObservateurs = pgTable('remplacant_observateurs', {
+export const seancesObservations = pgTable('seances_observations', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-  remplacantId: integer('remplacant_id')
+  remplacantObserveId: integer('remplacant_observe_id')
     .notNull()
     .references(() => remplacants.id, { onDelete: 'cascade' }),
-  collaborateurId: integer('collaborateur_id')
+  observateurType: observateurTypeEnum('observateur_type').notNull(),
+  observateurRemplacantId: integer('observateur_remplacant_id')
+    .references(() => remplacants.id, { onDelete: 'set null' }),
+  observateurCollaborateurId: integer('observateur_collaborateur_id')
+    .references(() => collaborateurs.id, { onDelete: 'set null' }),
+  ecoleId: integer('ecole_id')
     .notNull()
-    .references(() => collaborateurs.id, { onDelete: 'cascade' }),
+    .references(() => ecoles.id, { onDelete: 'cascade' }),
+  date: date('date').notNull(),
+  creneau: creneauEnum('creneau').notNull(),
+  note: text('note'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  index('remplacant_observateurs_remplacant_id_idx').on(table.remplacantId),
-  index('remplacant_observateurs_collaborateur_id_idx').on(table.collaborateurId),
+  index('seances_observations_remplacant_observe_id_idx').on(table.remplacantObserveId),
+  index('seances_observations_ecole_id_idx').on(table.ecoleId),
+  index('seances_observations_date_idx').on(table.date),
 ])
 
 // ─── Types ───────────────────────────────────────────────────
@@ -70,5 +83,5 @@ export type Remplacant = typeof remplacants.$inferSelect
 export type NewRemplacant = typeof remplacants.$inferInsert
 export type RemplacantRemarque = typeof remplacantRemarques.$inferSelect
 export type NewRemplacantRemarque = typeof remplacantRemarques.$inferInsert
-export type RemplacantObservateur = typeof remplacantObservateurs.$inferSelect
-export type NewRemplacantObservateur = typeof remplacantObservateurs.$inferInsert
+export type SeanceObservation = typeof seancesObservations.$inferSelect
+export type NewSeanceObservation = typeof seancesObservations.$inferInsert

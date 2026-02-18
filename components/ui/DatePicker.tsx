@@ -1,11 +1,22 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { DayPicker } from 'react-day-picker'
 import { fr } from 'date-fns/locale'
-import { format, parse, isValid } from 'date-fns'
+import {
+  format,
+  parse,
+  isValid,
+  addDays,
+  addWeeks,
+  nextSaturday,
+  startOfWeek,
+  isSaturday,
+  isSunday,
+  isSameDay,
+} from 'date-fns'
 import { CalendarIcon } from '@heroicons/react/24/outline'
-import 'react-day-picker/dist/style.css'
+import 'react-day-picker/src/style.css'
 
 interface DatePickerProps {
   value: string // Format YYYY-MM-DD
@@ -16,71 +27,131 @@ interface DatePickerProps {
   required?: boolean
 }
 
+interface Preset {
+  label: string
+  getDate: () => Date
+}
+
 export default function DatePicker({
   value,
   onChange,
-  placeholder = 'jj/mm/aaaa',
+  placeholder = 'dd/mm/yy',
   disabled = false,
   className = '',
   required = false,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
+  const [displayMonth, setDisplayMonth] = useState(() => {
+    if (value) {
+      const d = parse(value, 'yyyy-MM-dd', new Date())
+      return isValid(d) ? new Date(d.getFullYear(), d.getMonth(), 1) : new Date()
+    }
+    return new Date()
+  })
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Convertir YYYY-MM-DD en Date
   const selectedDate = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
 
-  // Synchroniser inputValue avec value
+  const presets = useMemo<Preset[]>(() => {
+    const today = new Date()
+    return [
+      { label: "Aujourd'hui", getDate: () => today },
+      { label: 'Demain', getDate: () => addDays(today, 1) },
+      {
+        label: 'Ce week-end',
+        getDate: () => (isSaturday(today) || isSunday(today) ? today : nextSaturday(today)),
+      },
+      {
+        label: 'Lundi prochain',
+        getDate: () => startOfWeek(addWeeks(today, 1), { weekStartsOn: 1 }),
+      },
+      {
+        label: 'Week-end prochain',
+        getDate: () => nextSaturday(addWeeks(today, isSaturday(today) || isSunday(today) ? 0 : 1)),
+      },
+      { label: 'Dans 2 semaines', getDate: () => addWeeks(today, 2) },
+      { label: 'Dans 4 semaines', getDate: () => addWeeks(today, 4) },
+    ]
+  }, [])
+
+  // Check which preset matches the current value
+  const activePresetIndex = useMemo(() => {
+    if (!selectedDate) return -1
+    return presets.findIndex((p) => isSameDay(p.getDate(), selectedDate))
+  }, [selectedDate, presets])
+
   useEffect(() => {
     if (value) {
       const date = parse(value, 'yyyy-MM-dd', new Date())
       if (isValid(date)) {
-        setInputValue(format(date, 'dd/MM/yyyy'))
+        setInputValue(format(date, 'dd/MM/yy'))
       }
     } else {
       setInputValue('')
     }
   }, [value])
 
-  // Fermer le calendrier en cliquant ailleurs
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Gérer la saisie manuelle
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value
     setInputValue(raw)
 
-    // Essayer de parser la date
+    if (raw.length === 8) {
+      const parsed = parse(raw, 'dd/MM/yy', new Date())
+      if (isValid(parsed)) {
+        onChange(format(parsed, 'yyyy-MM-dd'))
+        setDisplayMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+      }
+    }
     if (raw.length === 10) {
       const parsed = parse(raw, 'dd/MM/yyyy', new Date())
       if (isValid(parsed)) {
         onChange(format(parsed, 'yyyy-MM-dd'))
+        setDisplayMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
       }
-    } else if (raw === '') {
+    }
+    if (raw === '') {
       onChange('')
     }
   }
 
-  // Gérer la sélection dans le calendrier
   const handleDaySelect = (date: Date | undefined) => {
     if (date) {
       onChange(format(date, 'yyyy-MM-dd'))
-      setInputValue(format(date, 'dd/MM/yyyy'))
+      setInputValue(format(date, 'dd/MM/yy'))
     } else {
       onChange('')
       setInputValue('')
     }
     setIsOpen(false)
+  }
+
+  const handlePresetClick = (preset: Preset) => {
+    const date = preset.getDate()
+    onChange(format(date, 'yyyy-MM-dd'))
+    setInputValue(format(date, 'dd/MM/yy'))
+    setDisplayMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    setIsOpen(false)
+  }
+
+  const handleClear = () => {
+    onChange('')
+    setInputValue('')
+  }
+
+  const handleGoToToday = () => {
+    const today = new Date()
+    setDisplayMonth(new Date(today.getFullYear(), today.getMonth(), 1))
   }
 
   return (
@@ -108,37 +179,59 @@ export default function DatePicker({
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-          <DayPicker
-            mode="single"
-            selected={selectedDate}
-            onSelect={handleDaySelect}
-            locale={fr}
-            weekStartsOn={1}
-            showOutsideDays
-            fixedWeeks
-            classNames={{
-              root: 'p-3',
-              months: 'flex flex-col',
-              month: 'space-y-2',
-              caption: 'flex justify-center relative items-center h-10',
-              caption_label: 'text-sm font-medium text-gray-900',
-              nav: 'flex items-center gap-1',
-              nav_button: 'h-7 w-7 bg-transparent p-0 hover:bg-gray-100 rounded-md flex items-center justify-center',
-              nav_button_previous: 'absolute left-1',
-              nav_button_next: 'absolute right-1',
-              table: 'w-full border-collapse',
-              head_row: 'flex',
-              head_cell: 'text-gray-500 w-8 font-normal text-xs text-center',
-              row: 'flex w-full mt-1',
-              cell: 'text-center text-sm relative p-0 focus-within:relative focus-within:z-20',
-              day: 'h-8 w-8 p-0 font-normal rounded-md hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-500',
-              day_selected: 'bg-purple-600 text-white hover:bg-purple-700',
-              day_today: 'font-bold text-purple-600',
-              day_outside: 'text-gray-300',
-              day_disabled: 'text-gray-300',
-            }}
-          />
+        <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl ring-1 ring-black/5 rdp-purple-theme">
+          <div className="flex">
+            {/* Presets (left) */}
+            <div className="border-r border-gray-100 p-2 flex flex-col gap-0.5 min-w-[160px]" style={{ paddingTop: '1.5rem' }}>
+              {presets.map((preset, i) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => handlePresetClick(preset)}
+                  className={`text-left text-[13px] px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+                    activePresetIndex === i
+                      ? 'bg-purple-100 text-purple-700 font-semibold'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Calendar (right) */}
+            <div className="flex flex-col">
+              <DayPicker
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleDaySelect}
+                month={displayMonth}
+                onMonthChange={setDisplayMonth}
+                locale={fr}
+                weekStartsOn={1}
+                showOutsideDays
+                fixedWeeks
+              />
+
+              {/* Footer */}
+              <div className="flex items-center justify-between mx-3 mb-3 mt-0 pt-2.5 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Supprimer la date
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoToToday}
+                  className="text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors"
+                >
+                  Aujourd&apos;hui
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

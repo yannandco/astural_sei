@@ -41,7 +41,9 @@ export async function GET(request: NextRequest) {
         name: ecoles.name,
         etablissementId: ecoles.etablissementId,
         directeurId: ecoles.directeurId,
-        address: ecoles.address,
+        rue: ecoles.rue,
+        codePostal: ecoles.codePostal,
+        ville: ecoles.ville,
         phone: ecoles.phone,
         email: ecoles.email,
         isActive: ecoles.isActive,
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
     const { user } = await requireRole(['admin'])
 
     const body = await request.json()
-    const { name, etablissementId, directeurId, address, phone, email } = body
+    const { name, etablissementId, directeurId, rue, codePostal, ville, phone, email } = body
 
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Le nom est requis' }, { status: 400 })
@@ -107,7 +109,9 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         etablissementId,
         directeurId: directeurId || null,
-        address: address?.trim() || null,
+        rue: rue?.trim() || null,
+        codePostal: codePostal?.trim() || null,
+        ville: ville?.trim() || null,
         phone: phone?.trim() || null,
         email: email?.trim() || null,
         createdBy: user.id,

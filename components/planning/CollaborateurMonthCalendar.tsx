@@ -6,9 +6,11 @@ import Link from 'next/link'
 import {
   Creneau,
   JourSemaine,
+  AbsenceData,
   JOUR_LABELS,
   JOURS_CALENDRIER,
   CRENEAU_LABELS,
+  MOTIF_LABELS,
   formatDate,
   getJourSemaine,
 } from './types'
@@ -34,11 +36,21 @@ interface Remplacement {
   dateDebut: string
   dateFin: string
   creneau: Creneau
+  motif: string | null
+}
+
+export interface CellClickInfo {
+  date: string
+  creneau: Creneau
+  type: 'presence' | 'absence'
 }
 
 interface CollaborateurMonthCalendarProps {
   presences: Presence[]
   remplacements: Remplacement[]
+  absences?: AbsenceData[]
+  onRemplacementClick?: (remplacement: Remplacement) => void
+  onCellClick?: (info: CellClickInfo) => void
 }
 
 const MOIS_LABELS = [
@@ -58,6 +70,9 @@ function getWeekNumber(date: Date): number {
 export default function CollaborateurMonthCalendar({
   presences,
   remplacements,
+  absences: absencesData = [],
+  onRemplacementClick,
+  onCellClick,
 }: CollaborateurMonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const today = new Date()
@@ -138,9 +153,18 @@ export default function CollaborateurMonthCalendar({
     setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1))
   }, [])
 
-  // Get remplacement for a specific date and créneau
-  const getRemplacementForCell = (dateStr: string, creneau: Creneau): Remplacement | undefined => {
-    return remplacements.find(r => {
+  // Get absence for a specific date and créneau
+  const getAbsenceForCell = (dateStr: string, creneau: Creneau): AbsenceData | undefined => {
+    return absencesData.find(a => {
+      const isInRange = dateStr >= a.dateDebut && dateStr <= a.dateFin
+      const creneauMatch = a.creneau === creneau || a.creneau === 'journee' || creneau === 'journee'
+      return isInRange && creneauMatch
+    })
+  }
+
+  // Get all remplacements for a specific date and créneau
+  const getRemplacementsForCell = (dateStr: string, creneau: Creneau): Remplacement[] => {
+    return remplacements.filter(r => {
       const isInRange = dateStr >= r.dateDebut && dateStr <= r.dateFin
       const creneauMatch = r.creneau === creneau || r.creneau === 'journee' || creneau === 'journee'
       return isInRange && creneauMatch
@@ -207,11 +231,10 @@ export default function CollaborateurMonthCalendar({
         <table className="w-full border-collapse text-xs table-fixed">
           <thead>
             <tr>
-              <th className="w-12 p-1 text-left text-xs font-medium text-gray-500 uppercase"></th>
               {JOURS_CALENDRIER.map((jour) => (
                 <th
                   key={jour}
-                  className="p-1 text-center text-xs font-medium text-gray-500 uppercase"
+                  className="p-1 pl-5 text-center text-xs font-medium text-gray-500 uppercase w-[20%]"
                   colSpan={2}
                 >
                   {JOUR_LABELS[jour]}
@@ -219,9 +242,8 @@ export default function CollaborateurMonthCalendar({
               ))}
             </tr>
             <tr className="border-b border-gray-200">
-              <th className="w-12"></th>
               {JOURS_CALENDRIER.map((jour) => (
-                <th key={jour} colSpan={2} className="py-1 px-1">
+                <th key={jour} colSpan={2} className="py-1 px-1 pl-5">
                   <div className="flex">
                     <div className="flex-1 text-center text-[10px] text-gray-400">Mat</div>
                     <div className="flex-1 text-center text-[10px] text-gray-400">AM</div>
@@ -233,18 +255,12 @@ export default function CollaborateurMonthCalendar({
           <tbody>
             {weeks.map((week, weekIndex) => (
               <tr key={weekIndex} className="border-b border-gray-200">
-                <td className="p-1 text-xs font-medium text-gray-500 align-middle border-r border-gray-100">
-                  <div className="text-center">
-                    <div className="text-[10px] text-gray-400">Sem.</div>
-                    <div>{getWeekNumber(week[0])}</div>
-                  </div>
-                </td>
                 {JOURS_CALENDRIER.map((jour) => {
                   const date = week.find(d => getJourSemaine(d) === jour)
 
                   if (!date) {
-                    return creneaux.map((creneau) => (
-                      <td key={`${weekIndex}-${jour}-${creneau}`} className="p-0.5">
+                    return creneaux.map((creneau, ci) => (
+                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${ci === 0 ? 'pl-5' : ''}`}>
                         <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
@@ -254,70 +270,131 @@ export default function CollaborateurMonthCalendar({
                   const isToday = dateStr === todayStr
 
                   return creneaux.map((creneau, creneauIndex) => {
-                    const remplacement = getRemplacementForCell(dateStr, creneau)
+                    const absence = getAbsenceForCell(dateStr, creneau)
+                    const cellRemplacements = getRemplacementsForCell(dateStr, creneau)
+                    const remplacement = cellRemplacements[0]
                     const presencesList = getPresenceForCell(jour, creneau)
                     const hasPresence = presencesList.length > 0
 
                     let bgColor = 'bg-gray-50 border-gray-200'
                     let textColor = 'text-gray-400'
+                    let isClickable = false
 
-                    if (remplacement) {
+                    // N'afficher absence/remplacement que sur les créneaux où le collaborateur travaille
+                    const showAbsence = absence && (hasPresence || cellRemplacements.length > 0)
+                    const showRemplacement = remplacement && !showAbsence
+
+                    if (showAbsence) {
+                      if (absence!.isRemplacee && cellRemplacements.length > 0) {
+                        bgColor = 'bg-orange-100 border-orange-300'
+                        textColor = 'text-orange-700'
+                        isClickable = !!onRemplacementClick
+                      } else {
+                        bgColor = 'bg-red-200 border-red-400'
+                        textColor = 'text-red-800'
+                        isClickable = !!onCellClick
+                      }
+                    } else if (showRemplacement) {
                       bgColor = 'bg-purple-100 border-purple-300'
                       textColor = 'text-purple-700'
+                      isClickable = !!onRemplacementClick
                     } else if (hasPresence) {
                       bgColor = 'bg-green-50 border-green-200'
                       textColor = 'text-green-700'
+                      isClickable = !!onCellClick
                     }
+
+                    const clickableClass = isClickable ? 'cursor-pointer hover:ring-2 ring-purple-400' : ''
 
                     const todayLeftClass = isToday && creneauIndex === 0 ? 'border-l-2 border-l-purple-400' : ''
                     const todayRightClass = isToday && creneauIndex === 1 ? 'border-r-2 border-r-purple-400' : ''
                     const todayTopBottom = isToday ? 'border-t-2 border-t-purple-400 border-b-2 border-b-purple-400' : ''
 
+                    const remplacementsTitlePart = cellRemplacements.map(r =>
+                      `${r.remplacantPrenom} ${r.remplacantNom}${r.ecoleNom ? ` (${r.ecoleNom})` : ''}`
+                    ).join(', ')
+
                     return (
-                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-0.5 ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}>
+                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${creneauIndex === 0 ? 'pl-5' : ''} ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}>
                         <div className="relative">
-                          {creneauIndex === 0 && (
-                            <div className={`absolute top-0.5 left-1 text-[10px] font-semibold z-10 ${isToday ? 'text-purple-700' : 'text-gray-600'}`}>
-                              {date.getDate()}
-                            </div>
-                          )}
+                          <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'}`}>
+                            {date.getDate()}
+                          </div>
                           <div
                             className={`
-                              h-[60px] rounded border flex flex-col justify-end items-start pt-4 pb-1 px-1
-                              ${bgColor} ${textColor}
+                              h-[64px] rounded border flex flex-col justify-end items-start pt-5 pb-1 px-1
+                              ${bgColor} ${textColor} ${clickableClass}
                             `}
                             title={
-                              remplacement
-                                ? `Remplacé par ${remplacement.remplacantPrenom} ${remplacement.remplacantNom}`
-                                : hasPresence
-                                ? presencesList.map(p => p.ecoleName).join(', ')
-                                : 'Non présent'
+                              showAbsence
+                                ? (absence!.isRemplacee && cellRemplacements.length > 0
+                                    ? `${MOTIF_LABELS[absence!.motif] || absence!.motif} — Remplacé par ${remplacementsTitlePart}`
+                                    : `Absent - ${MOTIF_LABELS[absence!.motif] || absence!.motif}`)
+                                : showRemplacement
+                                  ? `Remplacé par ${remplacementsTitlePart}`
+                                  : hasPresence
+                                    ? presencesList.map(p => p.ecoleName).join(', ')
+                                    : 'Non présent'
                             }
+                            onClick={isClickable ? (e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if ((showAbsence && absence!.isRemplacee && remplacement) || showRemplacement) {
+                                onRemplacementClick?.(remplacement!)
+                              } else if (onCellClick) {
+                                onCellClick({
+                                  date: dateStr,
+                                  creneau,
+                                  type: showAbsence ? 'absence' : 'presence',
+                                })
+                              }
+                            } : undefined}
                           >
-                            {remplacement ? (
-                              <Link
-                                href={`/remplacants/${remplacement.remplacantId}`}
-                                className="text-[10px] hover:underline leading-tight block w-full text-left"
-                              >
-                                <div className="truncate text-gray-400 mb-0.5">Est remplacé par</div>
-                                <div className="truncate font-medium">
-                                  {remplacement.remplacantPrenom} {remplacement.remplacantNom?.toUpperCase()}
+                            {showAbsence ? (
+                              absence!.isRemplacee && cellRemplacements.length > 0 ? (
+                                <div className="text-[10px] leading-tight w-full">
+                                  {cellRemplacements.slice(0, 2).map((r, i) => (
+                                    <div key={r.id} className="truncate">
+                                      <span className="font-medium">{r.remplacantPrenom} {r.remplacantNom?.toUpperCase()}</span>
+                                    </div>
+                                  ))}
+                                  {cellRemplacements.length > 2 && (
+                                    <div className="truncate opacity-75">+{cellRemplacements.length - 2}</div>
+                                  )}
+                                  {cellRemplacements[0]?.ecoleNom && (
+                                    <div className="truncate opacity-75 text-[9px]">{cellRemplacements[0].ecoleNom}</div>
+                                  )}
                                 </div>
-                                {remplacement.ecoleNom && (
-                                  <div className="truncate font-normal opacity-75">
-                                    {remplacement.ecoleNom}
+                              ) : (
+                                <div className="text-[10px] leading-tight w-full">
+                                  <div className="truncate font-medium">
+                                    {MOTIF_LABELS[absence!.motif] || absence!.motif}
                                   </div>
+                                </div>
+                              )
+                            ) : showRemplacement ? (
+                              <div className="text-[10px] leading-tight w-full">
+                                {cellRemplacements.slice(0, 2).map((r, i) => (
+                                  <div key={r.id} className="truncate">
+                                    <span className="font-medium">{r.remplacantPrenom} {r.remplacantNom?.toUpperCase()}</span>
+                                  </div>
+                                ))}
+                                {cellRemplacements.length > 2 && (
+                                  <div className="truncate opacity-75">+{cellRemplacements.length - 2}</div>
                                 )}
-                              </Link>
+                                {cellRemplacements[0]?.ecoleNom && (
+                                  <div className="truncate opacity-75 text-[9px]">{cellRemplacements[0].ecoleNom}</div>
+                                )}
+                              </div>
                             ) : hasPresence ? (
                               <div className="text-[10px] leading-tight">
-                                {presencesList.slice(0, 1).map((p) => (
+                                {presencesList.slice(0, 2).map((p) => (
                                   <div key={p.ecoleId} className="truncate">
                                     {p.ecoleName}
                                   </div>
                                 ))}
-                                {presencesList.length > 1 && (
-                                  <div className="opacity-75">+{presencesList.length - 1}</div>
+                                {presencesList.length > 2 && (
+                                  <div className="opacity-75">+{presencesList.length - 2}</div>
                                 )}
                               </div>
                             ) : null}
@@ -334,7 +411,7 @@ export default function CollaborateurMonthCalendar({
       </div>
 
       {/* Légende */}
-      <div className="flex gap-4 mt-4 text-xs">
+      <div className="flex flex-wrap gap-4 mt-4 text-xs">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-green-50 border border-green-200 rounded"></div>
           <span className="text-gray-600">Présence</span>
@@ -342,6 +419,14 @@ export default function CollaborateurMonthCalendar({
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
           <span className="text-gray-600">Remplacé</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-red-200 border border-red-400 rounded"></div>
+          <span className="text-gray-600">Absent</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 bg-orange-100 border border-orange-300 rounded"></div>
+          <span className="text-gray-600">Absent (remplacé)</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-gray-50 border border-gray-200 rounded"></div>

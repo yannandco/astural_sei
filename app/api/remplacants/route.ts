@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, asc, ilike, and, sql } from 'drizzle-orm'
+import { eq, asc, ilike, and, sql, lte, gte, notInArray } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { remplacants } from '@/lib/db/schema'
+import { remplacants, remplacantAffectations } from '@/lib/db/schema'
 import { requireRole, requireAuth } from '@/lib/auth/server'
 
 export async function GET(request: NextRequest) {
@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
     const isActive = searchParams.get('isActive')
     const isAvailable = searchParams.get('isAvailable')
+    const availableFrom = searchParams.get('availableFrom')
+    const availableTo = searchParams.get('availableTo')
 
     const conditions = []
 
@@ -27,6 +29,25 @@ export async function GET(request: NextRequest) {
 
     if (isAvailable !== null && isAvailable !== undefined && isAvailable !== '') {
       conditions.push(eq(remplacants.isAvailable, isAvailable === 'true'))
+    }
+
+    // Exclude remplaçants who already have a conflicting affectation
+    if (availableFrom && availableTo) {
+      const busyRemplacants = await db
+        .select({ remplacantId: remplacantAffectations.remplacantId })
+        .from(remplacantAffectations)
+        .where(
+          and(
+            eq(remplacantAffectations.isActive, true),
+            lte(remplacantAffectations.dateDebut, availableTo),
+            gte(remplacantAffectations.dateFin, availableFrom)
+          )
+        )
+
+      const busyIds = [...new Set(busyRemplacants.map((r) => r.remplacantId))]
+      if (busyIds.length > 0) {
+        conditions.push(notInArray(remplacants.id, busyIds))
+      }
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined

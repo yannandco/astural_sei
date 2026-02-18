@@ -10,7 +10,7 @@ interface Etablissement {
   name: string
 }
 
-const emptyForm = { name: '', etablissementId: '', address: '', phone: '', email: '' }
+const emptyForm = { name: '', etablissementId: '', rue: '', codePostal: '', ville: '', phone: '', email: '' }
 
 export default function CreateEcolePage() {
   const router = useRouter()
@@ -100,8 +100,18 @@ export default function CreateEcolePage() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Adresse</label>
-                <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
+                <label className="form-label">Rue</label>
+                <input type="text" value={formData.rue} onChange={(e) => updateField('rue', e.target.value)} className="form-input" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Code postal</label>
+                  <input type="text" value={formData.codePostal} onChange={(e) => updateField('codePostal', e.target.value)} className="form-input" maxLength={10} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ville</label>
+                  <input type="text" value={formData.ville} onChange={(e) => updateField('ville', e.target.value)} className="form-input" />
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">

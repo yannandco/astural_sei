@@ -73,7 +73,7 @@ export default function SpecificDateModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-container max-w-md">
+      <div className="modal-container max-w-md overflow-visible">
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           <button onClick={onClose} className="modal-close-button">
@@ -82,7 +82,7 @@ export default function SpecificDateModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="modal-body space-y-4">
+          <div className="modal-body space-y-4 overflow-visible">
             <p className="text-sm text-gray-600">{description}</p>
 
             {/* Date */}

@@ -19,6 +19,7 @@ interface CellContextMenuProps {
   onAddPonctuel: () => void
   onCreateAffectation: () => void
   onViewAffectation?: () => void
+  onDeleteAffectation?: () => void
 }
 
 export default function CellContextMenu({
@@ -30,6 +31,7 @@ export default function CellContextMenu({
   onAddPonctuel,
   onCreateAffectation,
   onViewAffectation,
+  onDeleteAffectation,
 }: CellContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -123,6 +125,14 @@ export default function CellContextMenu({
                 icon={<InformationCircleIcon className="w-4 h-4" />}
                 label="Voir détails affectation"
                 onClick={onViewAffectation}
+              />
+            )}
+            {onDeleteAffectation && (
+              <MenuItem
+                icon={<TrashIcon className="w-4 h-4" />}
+                label="Supprimer affectation"
+                onClick={onDeleteAffectation}
+                danger
               />
             )}
           </>

@@ -23,3 +23,18 @@ export const creneauEnum = pgEnum('creneau', ['matin', 'apres_midi', 'journee'])
 
 // Type de vacances/jours fériés
 export const vacancesTypeEnum = pgEnum('vacances_type', ['vacances', 'ferie'])
+
+// Type d'absence (collaborateur ou remplaçant)
+export const absenceTypeEnum = pgEnum('absence_type', ['collaborateur', 'remplacant'])
+
+// Motif d'absence
+export const absenceMotifEnum = pgEnum('absence_motif', ['maladie', 'conge', 'formation', 'autre'])
+
+// Statut message WhatsApp
+export const whatsappMessageStatusEnum = pgEnum('whatsapp_message_status', ['sent', 'delivered', 'read', 'failed'])
+
+// Réponse WhatsApp
+export const whatsappResponseEnum = pgEnum('whatsapp_response', ['disponible', 'pas_disponible'])
+
+// Type d'observateur (pour séances d'observation)
+export const observateurTypeEnum = pgEnum('observateur_type', ['remplacant', 'collaborateur'])

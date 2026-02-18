@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, count, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { remplacants, remplacantRemarques, remplacantObservateurs } from '@/lib/db/schema'
+import { remplacants, remplacantRemarques, seancesObservations } from '@/lib/db/schema'
 import { requireRole, requireAuth } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -45,16 +45,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
     }
 
-    // Get observateurs count
-    const [obsCount] = await db
+    // Get séances d'observation count
+    const [seancesCount] = await db
       .select({ count: count() })
-      .from(remplacantObservateurs)
-      .where(eq(remplacantObservateurs.remplacantId, remplacantId))
+      .from(seancesObservations)
+      .where(eq(seancesObservations.remplacantObserveId, remplacantId))
 
     return NextResponse.json({
       data: {
         ...remplacant,
-        observateursCount: obsCount?.count || 0,
+        seancesCount: seancesCount?.count || 0,
       },
     })
   } catch (error) {

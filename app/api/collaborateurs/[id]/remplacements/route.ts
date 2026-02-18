@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, gte, lte, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { remplacantAffectations, remplacants, ecoles } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { absences, collaborateurs, remplacantAffectations, remplacants, ecoles } from '@/lib/db/schema'
+import { requireAuth, requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -22,13 +22,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    let conditions = [
+    const conditions = [
       eq(remplacantAffectations.collaborateurId, collaborateurId),
       eq(remplacantAffectations.isActive, true),
     ]
 
     if (startDate && endDate) {
-      // Affectations qui chevauchent la période
       conditions.push(lte(remplacantAffectations.dateDebut, endDate))
       conditions.push(gte(remplacantAffectations.dateFin, startDate))
     }
@@ -58,6 +57,274 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     console.error('Error fetching remplacements:', error)
     if ((error as Error).message === 'Non authentifié') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// POST - Annoncer un remplacement (crée UNE absence + N affectations par créneau détecté)
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { user } = await requireRole(['admin'])
+
+    const { id } = await params
+    const collaborateurId = parseInt(id)
+
+    if (isNaN(collaborateurId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const { remplacantId, dateDebut, dateFin, entries, motif, motifDetails } = body as {
+      remplacantId: number
+      dateDebut: string
+      dateFin: string
+      entries: { ecoleId: number; date: string; creneau: 'matin' | 'apres_midi' | 'journee' }[]
+      motif: 'maladie' | 'conge' | 'formation' | 'autre'
+      motifDetails?: string
+    }
+
+    if (!remplacantId || !dateDebut || !dateFin || !entries || !Array.isArray(entries) || entries.length === 0 || !motif) {
+      return NextResponse.json({ error: 'Tous les champs obligatoires doivent être renseignés' }, { status: 400 })
+    }
+
+    const validCreneaux = ['matin', 'apres_midi', 'journee']
+    const validMotifs = ['maladie', 'conge', 'formation', 'autre']
+
+    if (!validMotifs.includes(motif)) {
+      return NextResponse.json({ error: 'Motif invalide' }, { status: 400 })
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateDebut) || !/^\d{4}-\d{2}-\d{2}$/.test(dateFin)) {
+      return NextResponse.json({ error: 'Format de date invalide (YYYY-MM-DD attendu)' }, { status: 400 })
+    }
+
+    for (const entry of entries) {
+      if (!entry.ecoleId || !entry.date || !entry.creneau) {
+        return NextResponse.json({ error: 'Chaque entrée doit avoir ecoleId, date et creneau' }, { status: 400 })
+      }
+      if (!validCreneaux.includes(entry.creneau)) {
+        return NextResponse.json({ error: 'Créneau invalide' }, { status: 400 })
+      }
+    }
+
+    // Vérifier que le collaborateur existe
+    const [collab] = await db
+      .select({ id: collaborateurs.id })
+      .from(collaborateurs)
+      .where(eq(collaborateurs.id, collaborateurId))
+      .limit(1)
+
+    if (!collab) {
+      return NextResponse.json({ error: 'Collaborateur non trouvé' }, { status: 404 })
+    }
+
+    // Vérifier que le remplaçant existe
+    const [remp] = await db
+      .select({ id: remplacants.id })
+      .from(remplacants)
+      .where(eq(remplacants.id, remplacantId))
+      .limit(1)
+
+    if (!remp) {
+      return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
+    }
+
+    // 1. Créer UNE SEULE absence pour toute la période
+    const [createdAbsence] = await db
+      .insert(absences)
+      .values({
+        type: 'collaborateur',
+        collaborateurId,
+        dateDebut,
+        dateFin,
+        creneau: 'journee',
+        motif,
+        motifDetails: motifDetails || null,
+        isActive: true,
+        createdBy: user.id,
+        updatedBy: user.id,
+      })
+      .returning()
+
+    // 2. Créer une affectation par entrée (une par date/créneau spécifique)
+    const createdAffectations = []
+
+    for (const entry of entries) {
+      const [createdAffectation] = await db
+        .insert(remplacantAffectations)
+        .values({
+          remplacantId,
+          collaborateurId,
+          ecoleId: entry.ecoleId,
+          dateDebut: entry.date,
+          dateFin: entry.date,
+          creneau: entry.creneau,
+          motif,
+          isActive: true,
+          createdBy: user.id,
+          updatedBy: user.id,
+        })
+        .returning()
+
+      createdAffectations.push(createdAffectation)
+    }
+
+    return NextResponse.json({
+      data: {
+        absence: createdAbsence,
+        affectations: createdAffectations,
+      },
+    }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating remplacement:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// PATCH - Changer le remplaçant sur une affectation existante
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { user } = await requireRole(['admin'])
+
+    const { id } = await params
+    const collaborateurId = parseInt(id)
+
+    if (isNaN(collaborateurId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const { affectationId, remplacantId } = body
+
+    if (!affectationId || !remplacantId) {
+      return NextResponse.json({ error: 'ID d\'affectation et ID remplaçant requis' }, { status: 400 })
+    }
+
+    // Vérifier que l'affectation existe et concerne le collaborateur
+    const [existing] = await db
+      .select()
+      .from(remplacantAffectations)
+      .where(
+        and(
+          eq(remplacantAffectations.id, affectationId),
+          eq(remplacantAffectations.collaborateurId, collaborateurId)
+        )
+      )
+      .limit(1)
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Affectation non trouvée' }, { status: 404 })
+    }
+
+    // Vérifier que le nouveau remplaçant existe
+    const [remp] = await db
+      .select({ id: remplacants.id })
+      .from(remplacants)
+      .where(eq(remplacants.id, remplacantId))
+      .limit(1)
+
+    if (!remp) {
+      return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
+    }
+
+    // Mettre à jour le remplaçant
+    await db
+      .update(remplacantAffectations)
+      .set({
+        remplacantId,
+        updatedBy: user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(remplacantAffectations.id, affectationId))
+
+    // Retourner l'affectation mise à jour avec joins
+    const [updated] = await db
+      .select({
+        id: remplacantAffectations.id,
+        remplacantId: remplacantAffectations.remplacantId,
+        remplacantNom: remplacants.lastName,
+        remplacantPrenom: remplacants.firstName,
+        ecoleId: remplacantAffectations.ecoleId,
+        ecoleNom: ecoles.name,
+        dateDebut: remplacantAffectations.dateDebut,
+        dateFin: remplacantAffectations.dateFin,
+        creneau: remplacantAffectations.creneau,
+        motif: remplacantAffectations.motif,
+      })
+      .from(remplacantAffectations)
+      .leftJoin(remplacants, eq(remplacantAffectations.remplacantId, remplacants.id))
+      .leftJoin(ecoles, eq(remplacantAffectations.ecoleId, ecoles.id))
+      .where(eq(remplacantAffectations.id, affectationId))
+
+    return NextResponse.json({ data: updated })
+  } catch (error) {
+    console.error('Error updating remplacement:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// DELETE - Supprimer un remplacement (affectation seulement, l'absence reste)
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireRole(['admin'])
+
+    const { id } = await params
+    const collaborateurId = parseInt(id)
+
+    if (isNaN(collaborateurId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const affectationId = searchParams.get('affectationId')
+
+    if (!affectationId) {
+      return NextResponse.json({ error: 'ID d\'affectation requis' }, { status: 400 })
+    }
+
+    // Vérifier que l'affectation existe et concerne le collaborateur
+    const [existing] = await db
+      .select()
+      .from(remplacantAffectations)
+      .where(
+        and(
+          eq(remplacantAffectations.id, parseInt(affectationId)),
+          eq(remplacantAffectations.collaborateurId, collaborateurId)
+        )
+      )
+      .limit(1)
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Affectation non trouvée' }, { status: 404 })
+    }
+
+    // Supprimer l'affectation (l'absence reste)
+    const [deleted] = await db
+      .delete(remplacantAffectations)
+      .where(eq(remplacantAffectations.id, parseInt(affectationId)))
+      .returning()
+
+    return NextResponse.json({ data: deleted })
+  } catch (error) {
+    console.error('Error deleting remplacement:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }

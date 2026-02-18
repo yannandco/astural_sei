@@ -9,6 +9,7 @@ import {
   remplacantAffectations,
   collaborateurs,
   ecoles,
+  absences,
 } from '@/lib/db/schema'
 import { requireAuth } from '@/lib/auth/server'
 
@@ -112,6 +113,27 @@ export async function GET(request: NextRequest) {
         )
       )
 
+    // 6. Récupérer les absences de remplaçants pour la période
+    const allAbsences = await db
+      .select({
+        id: absences.id,
+        remplacantId: absences.remplacantId,
+        dateDebut: absences.dateDebut,
+        dateFin: absences.dateFin,
+        creneau: absences.creneau,
+        motif: absences.motif,
+        motifDetails: absences.motifDetails,
+      })
+      .from(absences)
+      .where(
+        and(
+          eq(absences.type, 'remplacant'),
+          eq(absences.isActive, true),
+          lte(absences.dateDebut, endDate),
+          gte(absences.dateFin, startDate)
+        )
+      )
+
     // Grouper par remplaçant
     const recurrencesByPeriode = new Map<number, typeof allRecurrentes>()
     for (const result of recurrencesResults) {
@@ -161,6 +183,14 @@ export async function GET(request: NextRequest) {
       affectationsByRemplacant.set(aff.remplacantId, list)
     }
 
+    const absencesByRemplacant = new Map<number, typeof allAbsences>()
+    for (const a of allAbsences) {
+      if (a.remplacantId === null) continue
+      const list = absencesByRemplacant.get(a.remplacantId) || []
+      list.push(a)
+      absencesByRemplacant.set(a.remplacantId, list)
+    }
+
     // Construire la réponse
     const data = allRemplacants.map((r) => ({
       id: r.id,
@@ -170,6 +200,7 @@ export async function GET(request: NextRequest) {
       periodes: periodesByRemplacant.get(r.id) || [],
       specifiques: specifiquesByRemplacant.get(r.id) || [],
       affectations: affectationsByRemplacant.get(r.id) || [],
+      absences: absencesByRemplacant.get(r.id) || [],
     }))
 
     return NextResponse.json({ data })

@@ -495,3 +495,111 @@
 .animate-progress {
   animation: progress 3s ease-in-out infinite;
 }
+
+/* ===========================================
+   REACT-DAY-PICKER v9 — Purple Theme
+   =========================================== */
+
+.rdp-purple-theme .rdp-root {
+  --rdp-accent-color: #7c3aed;
+  --rdp-accent-background-color: #f5f3ff;
+  --rdp-day-height: 40px;
+  --rdp-day-width: 40px;
+  --rdp-day_button-border-radius: 10px;
+  --rdp-day_button-border: 2px solid transparent;
+  --rdp-day_button-height: 38px;
+  --rdp-day_button-width: 38px;
+  --rdp-selected-border: 2px solid #7c3aed;
+  --rdp-today-color: #7c3aed;
+  --rdp-nav_button-height: 2rem;
+  --rdp-nav_button-width: 2rem;
+  --rdp-nav-height: 2.75rem;
+  --rdp-outside-opacity: 0.3;
+  font-size: 14px;
+  padding: 12px 14px 6px 14px;
+}
+
+/* Month + year title */
+.rdp-purple-theme .rdp-month_caption {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+  justify-content: center;
+  text-transform: capitalize;
+}
+
+/* Weekday headers */
+.rdp-purple-theme .rdp-weekday {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: capitalize;
+  padding: 6px 0;
+}
+
+/* Day numbers */
+.rdp-purple-theme .rdp-day_button {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 150ms ease;
+}
+
+.rdp-purple-theme .rdp-day_button:hover {
+  background-color: #f3f0ff;
+  color: #7c3aed;
+}
+
+/* Selected day — filled purple pill */
+.rdp-purple-theme .rdp-selected .rdp-day_button {
+  background-color: #7c3aed;
+  color: white;
+  border-color: #7c3aed;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+}
+
+.rdp-purple-theme .rdp-selected .rdp-day_button:hover {
+  background-color: #6d28d9;
+  border-color: #6d28d9;
+}
+
+/* Today — purple ring */
+.rdp-purple-theme .rdp-today:not(.rdp-outside):not(.rdp-selected) .rdp-day_button {
+  font-weight: 700;
+  color: #7c3aed;
+  border: 2px solid #c4b5fd;
+  background-color: #faf5ff;
+}
+
+.rdp-purple-theme .rdp-selected.rdp-today .rdp-day_button {
+  color: white;
+  border-color: #7c3aed;
+}
+
+/* Outside days */
+.rdp-purple-theme .rdp-outside .rdp-day_button {
+  color: #d1d5db;
+}
+
+/* Nav arrows */
+.rdp-purple-theme .rdp-chevron {
+  fill: #9ca3af;
+  transition: fill 150ms ease;
+}
+
+.rdp-purple-theme .rdp-button_next,
+.rdp-purple-theme .rdp-button_previous {
+  border-radius: 8px;
+  transition: background-color 150ms ease;
+}
+
+.rdp-purple-theme .rdp-button_next:hover .rdp-chevron,
+.rdp-purple-theme .rdp-button_previous:hover .rdp-chevron {
+  fill: #7c3aed;
+}
+
+.rdp-purple-theme .rdp-button_next:hover,
+.rdp-purple-theme .rdp-button_previous:hover {
+  background-color: #f3f0ff;
+}

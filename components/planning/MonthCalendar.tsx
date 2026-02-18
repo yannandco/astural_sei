@@ -13,6 +13,7 @@ import {
   DisponibilitePeriode,
   DisponibiliteSpecifique,
   Affectation,
+  AbsenceData,
   VacancesScolaires,
   CellData,
   JOUR_LABELS,
@@ -27,6 +28,7 @@ interface MonthCalendarProps {
   periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
+  absences?: AbsenceData[]
   vacances?: VacancesScolaires[]
   onRefresh: () => void
   readOnly?: boolean
@@ -42,6 +44,7 @@ export default function MonthCalendar({
   periodes,
   specifiques,
   affectations,
+  absences: absencesData = [],
   vacances = [],
   onRefresh,
   readOnly = false,
@@ -139,12 +142,13 @@ export default function MonthCalendar({
   const getCellData = useCallback(
     (date: Date, creneau: Creneau): CellData => {
       const dateStr = formatDate(date)
-      const { status, affectation, specifique } = calculateCellStatusWithPeriodes(
+      const { status, affectation, specifique, absence } = calculateCellStatusWithPeriodes(
         dateStr,
         creneau,
         periodes,
         specifiques,
-        affectations
+        affectations,
+        absencesData.length > 0 ? absencesData : undefined
       )
       const { isVacances, nom: vacancesNom } = isDateInVacances(dateStr)
 
@@ -154,11 +158,12 @@ export default function MonthCalendar({
         status,
         affectation,
         specifique,
+        absence,
         isVacances,
         vacancesNom,
       }
     },
-    [periodes, specifiques, affectations, isDateInVacances]
+    [periodes, specifiques, affectations, absencesData, isDateInVacances]
   )
 
   const handleCellClick = (data: CellData, event: React.MouseEvent) => {
@@ -233,6 +238,27 @@ export default function MonthCalendar({
       isOpen: true,
       editingAffectation: contextMenu.data.affectation,
     })
+    closeContextMenu()
+  }
+
+  const handleDeleteAffectation = async () => {
+    if (!contextMenu?.data.affectation) return
+    if (!confirm('Supprimer cette affectation ?')) {
+      closeContextMenu()
+      return
+    }
+
+    try {
+      const res = await fetch(
+        `/api/remplacants/${remplacantId}/affectations?affectationId=${contextMenu.data.affectation.id}`,
+        { method: 'DELETE' }
+      )
+      if (res.ok) {
+        onRefresh()
+      }
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error)
+    }
     closeContextMenu()
   }
 
@@ -325,11 +351,10 @@ export default function MonthCalendar({
         <table className="w-full border-collapse text-xs table-fixed">
           <thead>
             <tr>
-              <th className="w-12 p-1 text-left text-xs font-medium text-gray-500 uppercase"></th>
               {JOURS_CALENDRIER.map((jour) => (
                 <th
                   key={jour}
-                  className="p-1 text-center text-xs font-medium text-gray-500 uppercase"
+                  className="p-1 pl-5 text-center text-xs font-medium text-gray-500 uppercase w-[20%]"
                   colSpan={2}
                 >
                   {JOUR_LABELS[jour]}
@@ -337,9 +362,8 @@ export default function MonthCalendar({
               ))}
             </tr>
             <tr className="border-b border-gray-200">
-              <th className="w-12"></th>
               {JOURS_CALENDRIER.map((jour) => (
-                <th key={jour} colSpan={2} className="py-1 px-1">
+                <th key={jour} colSpan={2} className="py-1 px-1 pl-5">
                   <div className="flex">
                     <div className="flex-1 text-center text-[10px] text-gray-400">Mat</div>
                     <div className="flex-1 text-center text-[10px] text-gray-400">AM</div>
@@ -351,19 +375,13 @@ export default function MonthCalendar({
           <tbody>
             {weeks.map((week, weekIndex) => (
               <tr key={weekIndex} className="border-b border-gray-200">
-                <td className="p-1 text-xs font-medium text-gray-500 align-middle border-r border-gray-100">
-                  <div className="text-center">
-                    <div className="text-[10px] text-gray-400">Sem.</div>
-                    <div>{getWeekNumber(week[0])}</div>
-                  </div>
-                </td>
                 {JOURS_CALENDRIER.map((jour) => {
                   const date = week.find(d => getJourSemaine(d) === jour)
 
                   if (!date) {
-                    return creneaux.map((creneau) => (
-                      <td key={`${weekIndex}-${jour}-${creneau}`} className="p-0.5">
-                        <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
+                    return creneaux.map((creneau, ci) => (
+                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${ci === 0 ? 'pl-5' : ''}`}>
+                        <div className="h-[64px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
                   }
@@ -381,14 +399,12 @@ export default function MonthCalendar({
                     return (
                       <td
                         key={`${weekIndex}-${jour}-${creneau}`}
-                        className={`p-0.5 ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}
+                        className={`p-1 pb-2 ${creneauIndex === 0 ? 'pl-5' : ''} ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}
                       >
                         <div className="relative">
-                          {creneauIndex === 0 && (
-                            <div className={`absolute top-0.5 left-1 text-[10px] font-semibold z-10 ${isToday ? 'text-purple-700' : 'text-gray-600'}`}>
-                              {date.getDate()}
-                            </div>
-                          )}
+                          <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'}`}>
+                            {date.getDate()}
+                          </div>
                           <CalendarCell
                             data={cellData}
                             onClick={readOnly ? undefined : (data) => handleCellClick(data, window.event as unknown as React.MouseEvent)}
@@ -408,7 +424,7 @@ export default function MonthCalendar({
 
       {/* Légende */}
       <div className="mt-4">
-        <PlanningLegend />
+        <PlanningLegend showAbsences={absencesData.length > 0} />
       </div>
 
       {/* Menu contextuel */}
@@ -422,6 +438,7 @@ export default function MonthCalendar({
           onAddPonctuel={handleAddPonctuel}
           onCreateAffectation={handleCreateAffectation}
           onViewAffectation={contextMenu.data.affectation ? handleViewAffectation : undefined}
+          onDeleteAffectation={contextMenu.data.affectation ? handleDeleteAffectation : undefined}
         />
       )}
 

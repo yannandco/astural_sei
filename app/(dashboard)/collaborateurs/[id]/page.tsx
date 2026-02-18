@@ -3,9 +3,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeftIcon, UserIcon, TrashIcon, PencilIcon, CalendarDaysIcon, BuildingOfficeIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, UserIcon, TrashIcon, PencilIcon, CalendarDaysIcon, BuildingOfficeIcon, PlusIcon, XMarkIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline'
 import {
   CollaborateurMonthCalendar,
+  AbsenceModal,
+  ReplacementModal,
+  AbsenceData,
+  MOTIF_LABELS,
   Creneau,
   CRENEAU_LABELS,
   JOUR_LABELS,
@@ -15,6 +19,7 @@ import {
   getWeekDates,
   formatDate,
 } from '@/components/planning'
+import type { CellClickInfo } from '@/components/planning/CollaborateurMonthCalendar'
 import { DatePicker } from '@/components/ui'
 
 interface JourPresence {
@@ -67,6 +72,14 @@ interface Remplacement {
   motif: string | null
 }
 
+interface Remarque {
+  id: number
+  content: string
+  createdAt: string
+  createdByName: string | null
+  createdByEmail: string | null
+}
+
 interface Sector {
   id: number
   name: string
@@ -107,6 +120,19 @@ export default function CollaborateurDetailPage() {
   const [sectors, setSectors] = useState<Sector[]>([])
   const [remplacements, setRemplacements] = useState<Remplacement[]>([])
   const [presences, setPresences] = useState<Presence[]>([])
+  const [absencesCollab, setAbsencesCollab] = useState<AbsenceData[]>([])
+  const [showAbsenceModal, setShowAbsenceModal] = useState(false)
+  const [editingAbsence, setEditingAbsence] = useState<AbsenceData | null>(null)
+  const [showReplacementModal, setShowReplacementModal] = useState(false)
+  const [editingRemplacement, setEditingRemplacement] = useState<Remplacement | null>(null)
+  const [cellActionMenu, setCellActionMenu] = useState<CellClickInfo | null>(null)
+  const [prefillDate, setPrefillDate] = useState<string | null>(null)
+  const [prefillCreneau, setPrefillCreneau] = useState<Creneau | null>(null)
+
+  // Remarques
+  const [remarques, setRemarques] = useState<Remarque[]>([])
+  const [showAddRemarque, setShowAddRemarque] = useState(false)
+  const [newRemarque, setNewRemarque] = useState('')
 
   // Affectations management
   const [affectations, setAffectations] = useState<Affectation[]>([])
@@ -148,11 +174,18 @@ export default function CollaborateurDetailPage() {
       const startDateStr = formatDate(startDate)
       const endDateStr = formatDate(endDate)
 
-      const res = await fetch(`/api/collaborateurs/${id}/planning?startDate=${startDateStr}&endDate=${endDateStr}`)
-      if (res.ok) {
-        const { data } = await res.json()
+      const [planRes, absRes] = await Promise.all([
+        fetch(`/api/collaborateurs/${id}/planning?startDate=${startDateStr}&endDate=${endDateStr}`),
+        fetch(`/api/collaborateurs/${id}/absences?startDate=${startDateStr}&endDate=${endDateStr}`),
+      ])
+      if (planRes.ok) {
+        const { data } = await planRes.json()
         setPresences(data?.presences || [])
         setRemplacements(data?.remplacements || [])
+      }
+      if (absRes.ok) {
+        const { data } = await absRes.json()
+        setAbsencesCollab(data || [])
       }
     } catch (error) {
       console.error('Error fetching planning:', error)
@@ -162,12 +195,13 @@ export default function CollaborateurDetailPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [collabRes, sectorsRes, ecolesRes, periodesRes, affectationsRes] = await Promise.all([
+        const [collabRes, sectorsRes, ecolesRes, periodesRes, affectationsRes, remarquesRes] = await Promise.all([
           fetch(`/api/collaborateurs/${id}`),
           fetch('/api/sectors'),
           fetch('/api/ecoles'),
           fetch('/api/periodes-scolaires'),
           fetch(`/api/collaborateurs/${id}/ecoles`),
+          fetch(`/api/collaborateurs/${id}/remarques`),
         ])
 
         if (!collabRes.ok) {
@@ -180,6 +214,7 @@ export default function CollaborateurDetailPage() {
         const ecolesData = await ecolesRes.json()
         const periodesData = await periodesRes.json()
         const affectationsData = await affectationsRes.json()
+        const remarquesData = await remarquesRes.json()
         const c: Collaborateur = collabData.data
 
         setSectors(sectorsData.data || [])
@@ -190,6 +225,7 @@ export default function CollaborateurDetailPage() {
         })))
         setPeriodes(periodesData.data || [])
         setAffectations(affectationsData.data || [])
+        setRemarques(remarquesData.data || [])
         setFormData({
           lastName: c.lastName,
           firstName: c.firstName,
@@ -402,6 +438,138 @@ export default function CollaborateurDetailPage() {
     }
   }
 
+  // ─── Remarque handlers ─────────────────────────────────────
+
+  const formatDateTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const handleAddRemarque = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newRemarque.trim()) return
+    try {
+      const res = await fetch(`/api/collaborateurs/${id}/remarques`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newRemarque }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRemarques(prev => [data.data, ...prev])
+        setNewRemarque('')
+        setShowAddRemarque(false)
+      }
+    } catch (error) {
+      console.error('Error adding remarque:', error)
+    }
+  }
+
+  // ─── Absence handlers ─────────────────────────────────────
+  const handleSaveAbsence = async (data: {
+    dateDebut: string
+    dateFin: string
+    creneau: Creneau
+    motif: string
+    motifDetails?: string
+  }) => {
+    if (editingAbsence) {
+      const res = await fetch(`/api/collaborateurs/${id}/absences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ absenceId: editingAbsence.id, ...data }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        alert(error || 'Erreur lors de la modification')
+        return
+      }
+    } else {
+      const res = await fetch(`/api/collaborateurs/${id}/absences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        alert(error || 'Erreur lors de la création')
+        return
+      }
+    }
+    setEditingAbsence(null)
+    await fetchPlanningData()
+  }
+
+  const handleDeleteAbsence = async (absenceId: number) => {
+    if (!confirm('Supprimer cette absence ?')) return
+    try {
+      const res = await fetch(`/api/collaborateurs/${id}/absences?absenceId=${absenceId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchPlanningData()
+      }
+    } catch (error) {
+      console.error('Error deleting absence:', error)
+    }
+  }
+
+  // ─── Remplacement handlers ─────────────────────────────────
+  const handleSaveReplacement = async (data: {
+    remplacantId: number
+    dateDebut: string
+    dateFin: string
+    entries: { ecoleId: number; date: string; creneau: Creneau }[]
+    motif: string
+    motifDetails?: string
+  }) => {
+    const res = await fetch(`/api/collaborateurs/${id}/remplacements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      alert(error || 'Erreur lors de la création du remplacement')
+      throw new Error(error)
+    }
+    await fetchPlanningData()
+  }
+
+  const handleUpdateReplacement = async (data: { affectationId: number; remplacantId: number }) => {
+    const res = await fetch(`/api/collaborateurs/${id}/remplacements`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const { error } = await res.json()
+      alert(error || 'Erreur lors de la mise à jour')
+      throw new Error(error)
+    }
+    setEditingRemplacement(null)
+    await fetchPlanningData()
+  }
+
+  const handleDeleteRemplacement = async (affectationId: number) => {
+    if (!confirm('Supprimer ce remplacement ? L\'absence associée sera conservée.')) return
+    try {
+      const res = await fetch(`/api/collaborateurs/${id}/remplacements?affectationId=${affectationId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchPlanningData()
+      }
+    } catch (error) {
+      console.error('Error deleting remplacement:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="ds-empty-state">
@@ -433,10 +601,26 @@ export default function CollaborateurDetailPage() {
               Retour
             </Link>
             {!isEditMode && (
-              <button onClick={() => setIsEditMode(true)} className="btn btn-primary">
-                <PencilIcon className="w-4 h-4 mr-2" />
-                Modifier
-              </button>
+              <>
+                <button
+                  onClick={() => { setEditingAbsence(null); setShowAbsenceModal(true) }}
+                  className="btn btn-secondary"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  Déclarer une absence
+                </button>
+                <button
+                  onClick={() => { setEditingRemplacement(null); setShowReplacementModal(true) }}
+                  className="btn btn-secondary"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  Annoncer un remplacement
+                </button>
+                <button onClick={() => setIsEditMode(true)} className="btn btn-primary">
+                  <PencilIcon className="w-4 h-4 mr-2" />
+                  Modifier
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -676,6 +860,35 @@ export default function CollaborateurDetailPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Remarques */}
+              <div className="ds-table-container">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-2">
+                      <ChatBubbleLeftIcon className="w-4 h-4" />
+                      Remarques ({remarques.length})
+                    </h2>
+                    <button type="button" onClick={() => setShowAddRemarque(true)} className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1">
+                      <PlusIcon className="w-4 h-4" /> Ajouter
+                    </button>
+                  </div>
+                  {remarques.length === 0 ? (
+                    <p className="text-gray-500 text-sm">Aucune remarque.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {remarques.map((remarque) => (
+                        <div key={remarque.id} className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{remarque.content}</p>
+                          <div className="mt-2 text-xs text-gray-400">
+                            {remarque.createdByName || remarque.createdByEmail || 'Utilisateur'} — {formatDateTime(remarque.createdAt)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -694,42 +907,211 @@ export default function CollaborateurDetailPage() {
                   <CollaborateurMonthCalendar
                     presences={presences}
                     remplacements={remplacements}
+                    absences={absencesCollab}
+                    onRemplacementClick={(r) => {
+                      setEditingRemplacement(r)
+                      setShowReplacementModal(true)
+                    }}
+                    onCellClick={(info) => setCellActionMenu(info)}
                   />
+
+                  {/* Menu d'action au clic sur une cellule */}
+                  {cellActionMenu && (
+                    <div className="fixed inset-0 z-40" onClick={() => setCellActionMenu(null)}>
+                      <div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl border border-gray-200 p-4 min-w-[280px] z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="text-sm font-medium text-gray-800 mb-1">
+                          {new Date(cellActionMenu.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          {' \u2022 '}{CRENEAU_LABELS[cellActionMenu.creneau]}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-3">
+                          {cellActionMenu.type === 'absence' ? 'Absence déclarée' : 'Créneau de présence'}
+                        </div>
+                        <div className="space-y-2">
+                          {cellActionMenu.type === 'presence' && (
+                            <>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-red-50 text-red-700 border border-red-200 transition-colors"
+                                onClick={() => {
+                                  setPrefillDate(cellActionMenu.date)
+                                  setPrefillCreneau(cellActionMenu.creneau)
+                                  setCellActionMenu(null)
+                                  setShowAbsenceModal(true)
+                                }}
+                              >
+                                Déclarer une absence
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-purple-50 text-purple-700 border border-purple-200 transition-colors"
+                                onClick={() => {
+                                  setPrefillDate(cellActionMenu.date)
+                                  setPrefillCreneau(null)
+                                  setCellActionMenu(null)
+                                  setShowReplacementModal(true)
+                                }}
+                              >
+                                Annoncer un remplacement
+                              </button>
+                            </>
+                          )}
+                          {cellActionMenu.type === 'absence' && (
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-purple-50 text-purple-700 border border-purple-200 transition-colors"
+                              onClick={() => {
+                                setPrefillDate(cellActionMenu.date)
+                                setCellActionMenu(null)
+                                setShowReplacementModal(true)
+                              }}
+                            >
+                              Annoncer un remplacement
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          className="mt-3 w-full text-center text-xs text-gray-400 hover:text-gray-600"
+                          onClick={() => setCellActionMenu(null)}
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Absences section */}
+              <div className="ds-table-container">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-2">
+                      Absences ({absencesCollab.length})
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingAbsence(null); setShowAbsenceModal(true) }}
+                      className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Ajouter
+                    </button>
+                  </div>
+                  {absencesCollab.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">Aucune absence</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {absencesCollab.map((abs) => (
+                        <div key={abs.id} className={`rounded-lg px-3 py-2 text-sm ${abs.isRemplacee ? 'bg-orange-50' : 'bg-red-50'}`}>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className={`font-medium ${abs.isRemplacee ? 'text-orange-800' : 'text-red-800'}`}>
+                                {new Date(abs.dateDebut).toLocaleDateString('fr-FR')}
+                                {abs.dateDebut !== abs.dateFin && ` - ${new Date(abs.dateFin).toLocaleDateString('fr-FR')}`}
+                                {' • '}{CRENEAU_LABELS[abs.creneau]}
+                              </div>
+                              <div className={abs.isRemplacee ? 'text-orange-600' : 'text-red-600'}>
+                                {MOTIF_LABELS[abs.motif] || abs.motif}
+                                {abs.motifDetails && ` — ${abs.motifDetails}`}
+                              </div>
+                              <div className="text-xs mt-0.5">
+                                {abs.isRemplacee ? (
+                                  <span className="text-green-600">✓ Remplacée</span>
+                                ) : (
+                                  <span className="text-red-500">✗ Non remplacée</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingAbsence(abs); setShowAbsenceModal(true) }}
+                                className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                                title="Modifier"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAbsence(abs.id)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Supprimer"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Remplacements list */}
-              {remplacements.length > 0 && (
-                <div className="ds-table-container">
-                  <div className="p-5">
-                    <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">
+              <div className="ds-table-container">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-2">
                       Remplacements ({remplacements.length})
                     </h2>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingRemplacement(null); setShowReplacementModal(true) }}
+                      className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Ajouter
+                    </button>
+                  </div>
+                  {remplacements.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">Aucun remplacement</p>
+                  ) : (
                     <div className="space-y-2">
                       {remplacements.slice(0, 10).map((r) => (
                         <div key={r.id} className="bg-purple-50 rounded-lg px-3 py-2 text-sm">
-                          <div className="font-medium text-purple-800">
-                            {new Date(r.dateDebut).toLocaleDateString('fr-FR')}
-                            {r.dateDebut !== r.dateFin && ` - ${new Date(r.dateFin).toLocaleDateString('fr-FR')}`}
-                            {' • '}{CRENEAU_LABELS[r.creneau]}
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-purple-800">
+                                {new Date(r.dateDebut).toLocaleDateString('fr-FR')}
+                                {r.dateDebut !== r.dateFin && ` - ${new Date(r.dateFin).toLocaleDateString('fr-FR')}`}
+                                {' \u2022 '}{CRENEAU_LABELS[r.creneau]}
+                              </div>
+                              <div className="text-purple-600">
+                                Remplacé par{' '}
+                                <Link href={`/remplacants/${r.remplacantId}`} className="hover:underline">
+                                  {r.remplacantPrenom} {r.remplacantNom}
+                                </Link>
+                                {r.ecoleNom && ` (${r.ecoleNom})`}
+                              </div>
+                              {r.motif && <div className="text-xs text-gray-500 mt-1">Motif: {r.motif}</div>}
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingRemplacement(r); setShowReplacementModal(true) }}
+                                className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                                title="Changer le remplaçant"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRemplacement(r.id)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Supprimer le remplacement"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="text-purple-600">
-                            Remplacé par{' '}
-                            <Link href={`/remplacants/${r.remplacantId}`} className="hover:underline">
-                              {r.remplacantPrenom} {r.remplacantNom}
-                            </Link>
-                            {r.ecoleNom && ` (${r.ecoleNom})`}
-                          </div>
-                          {r.motif && <div className="text-xs text-gray-500 mt-1">Motif: {r.motif}</div>}
                         </div>
                       ))}
                       {remplacements.length > 10 && (
                         <p className="text-xs text-gray-500">... et {remplacements.length - 10} autres</p>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Right column - Affectations */}
@@ -838,7 +1220,65 @@ export default function CollaborateurDetailPage() {
         )}
       </form>
 
+      {/* Modal Absence */}
+      <AbsenceModal
+        isOpen={showAbsenceModal}
+        onClose={() => { setShowAbsenceModal(false); setEditingAbsence(null); setPrefillDate(null); setPrefillCreneau(null) }}
+        onSave={handleSaveAbsence}
+        editingAbsence={editingAbsence || undefined}
+        prefillDate={prefillDate || undefined}
+        prefillCreneau={prefillCreneau || undefined}
+      />
+
+      {/* Modal Remplacement */}
+      <ReplacementModal
+        collaborateurId={parseInt(id)}
+        presences={presences}
+        isOpen={showReplacementModal}
+        onClose={() => { setShowReplacementModal(false); setEditingRemplacement(null); setPrefillDate(null) }}
+        onSave={handleSaveReplacement}
+        onUpdate={handleUpdateReplacement}
+        editingRemplacement={editingRemplacement || undefined}
+        prefillDate={prefillDate || undefined}
+      />
+
       {/* Modal Affectation */}
+      {/* Add Remarque Modal */}
+      {showAddRemarque && (
+        <div className="modal-overlay">
+          <div className="modal-container max-w-lg">
+            <div className="modal-header">
+              <div className="modal-header-content">
+                <h3 className="modal-title">Nouvelle remarque</h3>
+                <button onClick={() => setShowAddRemarque(false)} className="modal-close-button"><XMarkIcon className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <form onSubmit={handleAddRemarque}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Remarque *</label>
+                  <textarea
+                    required
+                    value={newRemarque}
+                    onChange={(e) => setNewRemarque(e.target.value)}
+                    className="form-input"
+                    rows={4}
+                    placeholder="Saisissez votre remarque..."
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <div></div>
+                <div className="modal-footer-actions">
+                  <button type="button" onClick={() => setShowAddRemarque(false)} className="btn btn-secondary">Annuler</button>
+                  <button type="submit" className="btn btn-primary">Ajouter</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showAffectationModal && (
         <div className="modal-overlay">
           <div className="modal-container max-w-lg">

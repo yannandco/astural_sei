@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         // Compter avant suppression
         const [{ value }] = await db.select({ value: count() }).from(collaborateurs)
         deleted = value
-        // Les collaborateurEcoles et remplacantObservateurs seront supprimés en cascade
+        // Les collaborateurEcoles seront supprimés en cascade
         await db.delete(collaborateurs)
         break
       }
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         // Compter avant suppression
         const [{ value }] = await db.select({ value: count() }).from(remplacants)
         deleted = value
-        // Les remplacantRemarques et remplacantObservateurs seront supprimés en cascade
+        // Les remplacantRemarques et seancesObservations seront supprimés en cascade
         await db.delete(remplacants)
         break
       }

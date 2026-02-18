@@ -40,7 +40,7 @@ export default function EtablissementDetailPage() {
   const [directeurs, setDirecteurs] = useState<Directeur[]>([])
   const [showAddEcole, setShowAddEcole] = useState(false)
   const [addMode, setAddMode] = useState<'create' | 'assign'>('create')
-  const [ecoleForm, setEcoleForm] = useState({ name: '', address: '', phone: '', email: '' })
+  const [ecoleForm, setEcoleForm] = useState({ name: '', rue: '', codePostal: '', ville: '', phone: '', email: '' })
   const [availableEcoles, setAvailableEcoles] = useState<EcoleOption[]>([])
   const [selectedEcoleId, setSelectedEcoleId] = useState('')
   const [formData, setFormData] = useState({
@@ -120,7 +120,7 @@ export default function EtablissementDetailPage() {
       })
       if (res.ok) {
         setShowAddEcole(false)
-        setEcoleForm({ name: '', address: '', phone: '', email: '' })
+        setEcoleForm({ name: '', rue: '', codePostal: '', ville: '', phone: '', email: '' })
         fetchEcoles()
       }
     } catch (error) {
@@ -149,7 +149,7 @@ export default function EtablissementDetailPage() {
 
   const openAddModal = () => {
     setAddMode('create')
-    setEcoleForm({ name: '', address: '', phone: '', email: '' })
+    setEcoleForm({ name: '', rue: '', codePostal: '', ville: '', phone: '', email: '' })
     setSelectedEcoleId('')
     fetchAvailableEcoles()
     setShowAddEcole(true)
@@ -468,8 +468,18 @@ export default function EtablissementDetailPage() {
                     <input type="text" required value={ecoleForm.name} onChange={(e) => setEcoleForm(prev => ({ ...prev, name: e.target.value }))} className="form-input" />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Adresse</label>
-                    <input type="text" value={ecoleForm.address} onChange={(e) => setEcoleForm(prev => ({ ...prev, address: e.target.value }))} className="form-input" />
+                    <label className="form-label">Rue</label>
+                    <input type="text" value={ecoleForm.rue} onChange={(e) => setEcoleForm(prev => ({ ...prev, rue: e.target.value }))} className="form-input" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label className="form-label">Code postal</label>
+                      <input type="text" value={ecoleForm.codePostal} onChange={(e) => setEcoleForm(prev => ({ ...prev, codePostal: e.target.value }))} className="form-input" maxLength={10} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Ville</label>
+                      <input type="text" value={ecoleForm.ville} onChange={(e) => setEcoleForm(prev => ({ ...prev, ville: e.target.value }))} className="form-input" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="form-group">

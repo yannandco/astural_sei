@@ -8,6 +8,7 @@ import {
   ecoles,
   collaborateurEcoles,
   periodesScolaires,
+  absences,
 } from '@/lib/db/schema'
 import { requireAuth } from '@/lib/auth/server'
 
@@ -108,6 +109,27 @@ export async function GET(request: NextRequest) {
         )
       )
 
+    // 4. Récupérer les absences de collaborateurs qui chevauchent la période
+    const allAbsences = await db
+      .select({
+        id: absences.id,
+        collaborateurId: absences.collaborateurId,
+        dateDebut: absences.dateDebut,
+        dateFin: absences.dateFin,
+        creneau: absences.creneau,
+        motif: absences.motif,
+        motifDetails: absences.motifDetails,
+      })
+      .from(absences)
+      .where(
+        and(
+          eq(absences.type, 'collaborateur'),
+          eq(absences.isActive, true),
+          lte(absences.dateDebut, endDate),
+          gte(absences.dateFin, startDate)
+        )
+      )
+
     // Grouper par collaborateur
     const presencesByCollaborateur = new Map<number, typeof allPresences>()
     for (const p of allPresences) {
@@ -123,6 +145,14 @@ export async function GET(request: NextRequest) {
       remplacementsByCollaborateur.set(r.collaborateurId, list)
     }
 
+    const absencesByCollaborateur = new Map<number, typeof allAbsences>()
+    for (const a of allAbsences) {
+      if (a.collaborateurId === null) continue
+      const list = absencesByCollaborateur.get(a.collaborateurId) || []
+      list.push(a)
+      absencesByCollaborateur.set(a.collaborateurId, list)
+    }
+
     // Construire la réponse (seulement les collaborateurs qui ont des présences OU des remplacements)
     const collaborateursWithData = allCollaborateurs
       .filter((c) => presencesByCollaborateur.has(c.id) || remplacementsByCollaborateur.has(c.id))
@@ -132,6 +162,7 @@ export async function GET(request: NextRequest) {
         firstName: c.firstName,
         presences: presencesByCollaborateur.get(c.id) || [],
         remplacements: remplacementsByCollaborateur.get(c.id) || [],
+        absences: absencesByCollaborateur.get(c.id) || [],
       }))
 
     return NextResponse.json({ data: collaborateursWithData })

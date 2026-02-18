@@ -33,5 +33,26 @@ export const collaborateurs = pgTable('collaborateurs', {
   index('collaborateurs_contrat_type_idx').on(table.contratType),
 ])
 
+// ─── Remarques (notes datées avec auteur) ─────────────────────
+
+export const collaborateurRemarques = pgTable('collaborateur_remarques', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  collaborateurId: integer('collaborateur_id')
+    .notNull()
+    .references(() => collaborateurs.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('collaborateur_remarques_collaborateur_id_idx').on(table.collaborateurId),
+  index('collaborateur_remarques_created_at_idx').on(table.createdAt),
+])
+
+// ─── Types ───────────────────────────────────────────────────
+
 export type Collaborateur = typeof collaborateurs.$inferSelect
 export type NewCollaborateur = typeof collaborateurs.$inferInsert
+export type CollaborateurRemarque = typeof collaborateurRemarques.$inferSelect
+export type NewCollaborateurRemarque = typeof collaborateurRemarques.$inferInsert

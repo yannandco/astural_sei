@@ -66,7 +66,9 @@ export const ecoles = pgTable('ecoles', {
     .references(() => etablissements.id, { onDelete: 'cascade' }),
   directeurId: integer('directeur_id')
     .references(() => directeurs.id, { onDelete: 'set null' }),
-  address: text('address'),
+  rue: text('rue'),
+  codePostal: varchar('code_postal', { length: 10 }),
+  ville: varchar('ville', { length: 100 }),
   phone: varchar('phone', { length: 30 }),
   email: varchar('email', { length: 255 }),
   remplacementApresJours: integer('remplacement_apres_jours'),

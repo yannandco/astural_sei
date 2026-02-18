@@ -182,7 +182,7 @@ export default function PeriodeModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container max-w-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-container max-w-2xl overflow-visible" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="text-lg font-semibold text-gray-900">
             {periode ? 'Modifier la période' : 'Nouvelle période de disponibilité'}
@@ -193,7 +193,7 @@ export default function PeriodeModal({
         </div>
 
         <div>
-          <div className="modal-body space-y-4">
+          <div className="modal-body space-y-4 overflow-visible">
             {error && (
               <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
                 {error}

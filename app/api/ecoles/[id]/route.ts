@@ -22,7 +22,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         name: ecoles.name,
         etablissementId: ecoles.etablissementId,
         directeurId: ecoles.directeurId,
-        address: ecoles.address,
+        rue: ecoles.rue,
+        codePostal: ecoles.codePostal,
+        ville: ecoles.ville,
         phone: ecoles.phone,
         email: ecoles.email,
         isActive: ecoles.isActive,
@@ -101,7 +103,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json()
     const updateData: Record<string, unknown> = { updatedAt: new Date(), updatedBy: user.id }
 
-    const fields = ['name', 'address', 'phone', 'email'] as const
+    const fields = ['name', 'rue', 'codePostal', 'ville', 'phone', 'email'] as const
     for (const field of fields) {
       if (body[field] !== undefined) updateData[field] = body[field]?.trim() || null
     }

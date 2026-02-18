@@ -234,7 +234,7 @@ export default function PeriodesPage() {
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-container max-w-md">
+          <div className="modal-container max-w-md overflow-visible">
             <div className="modal-header">
               <div className="modal-header-content">
                 <h3 className="modal-title">
@@ -246,7 +246,7 @@ export default function PeriodesPage() {
               </div>
             </div>
             <form onSubmit={handleSubmit}>
-              <div className="modal-body space-y-4">
+              <div className="modal-body space-y-4 overflow-visible">
                 {error && (
                   <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
                     {error}

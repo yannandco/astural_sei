@@ -7,15 +7,18 @@ import { ArrowLeftIcon, UserGroupIcon, TrashIcon, PlusIcon, XMarkIcon, ChatBubbl
 import {
   MonthCalendar,
   RecurringAvailabilityEditor,
+  AbsenceModal,
+  RemplacantReplacementModal,
   DisponibilitePeriode,
   DisponibiliteSpecifique,
   Affectation,
+  AbsenceData,
   VacancesScolaires,
   JourSemaine,
   Creneau,
   formatDate,
-  getWeekDates,
   CRENEAU_LABELS,
+  MOTIF_LABELS,
 } from '@/components/planning'
 import { DatePicker } from '@/components/ui'
 
@@ -27,18 +30,38 @@ interface Remarque {
   createdByEmail: string | null
 }
 
-interface Observateur {
+interface SeanceObservation {
   id: number
-  collaborateurId: number
-  collaborateurLastName: string
-  collaborateurFirstName: string
-  collaborateurEmail: string | null
+  remplacantObserveId: number
+  observateurType: 'remplacant' | 'collaborateur'
+  observateurRemplacantId: number | null
+  observateurCollaborateurId: number | null
+  ecoleId: number
+  date: string
+  creneau: string
+  note: string | null
+  ecoleName: string
+  observateurRemplacantLastName: string | null
+  observateurRemplacantFirstName: string | null
+  observateurCollaborateurLastName: string | null
+  observateurCollaborateurFirstName: string | null
 }
 
 interface Collaborateur {
   id: number
   lastName: string
   firstName: string
+}
+
+interface RemplacantOption {
+  id: number
+  lastName: string
+  firstName: string
+}
+
+interface EcoleOption {
+  id: number
+  name: string
 }
 
 type TabType = 'informations' | 'planning'
@@ -53,20 +76,34 @@ export default function RemplacantDetailPage() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('informations')
   const [remarques, setRemarques] = useState<Remarque[]>([])
-  const [observateurs, setObservateurs] = useState<Observateur[]>([])
+  const [seances, setSeances] = useState<SeanceObservation[]>([])
   const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([])
+  const [remplacantsList, setRemplacantsList] = useState<RemplacantOption[]>([])
+  const [ecolesList, setEcolesList] = useState<EcoleOption[]>([])
 
   const [showAddRemarque, setShowAddRemarque] = useState(false)
   const [newRemarque, setNewRemarque] = useState('')
-  const [showAddObservateur, setShowAddObservateur] = useState(false)
-  const [selectedCollaborateurId, setSelectedCollaborateurId] = useState('')
-  const [observateurSearch, setObservateurSearch] = useState('')
+  const [showAddSeance, setShowAddSeance] = useState(false)
+
+  // Séance form state
+  const [seanceDate, setSeanceDate] = useState('')
+  const [seanceCreneau, setSeanceCreneau] = useState('matin')
+  const [seanceEcoleId, setSeanceEcoleId] = useState('')
+  const [seanceEcoleSearch, setSeanceEcoleSearch] = useState('')
+  const [seanceObservateurType, setSeanceObservateurType] = useState<'collaborateur' | 'remplacant'>('collaborateur')
+  const [seanceObservateurId, setSeanceObservateurId] = useState('')
+  const [seanceObservateurSearch, setSeanceObservateurSearch] = useState('')
+  const [seanceNote, setSeanceNote] = useState('')
 
   // Planning state
   const [periodes, setPeriodes] = useState<DisponibilitePeriode[]>([])
   const [specifiques, setSpecifiques] = useState<DisponibiliteSpecifique[]>([])
   const [affectations, setAffectations] = useState<Affectation[]>([])
   const [vacances, setVacances] = useState<VacancesScolaires[]>([])
+  const [absencesRempl, setAbsencesRempl] = useState<AbsenceData[]>([])
+  const [showAbsenceModal, setShowAbsenceModal] = useState(false)
+  const [editingAbsence, setEditingAbsence] = useState<AbsenceData | null>(null)
+  const [showReplacementModal, setShowReplacementModal] = useState(false)
 
   const [formData, setFormData] = useState({
     lastName: '',
@@ -83,20 +120,18 @@ export default function RemplacantDetailPage() {
   // Fetch planning data
   const fetchPlanningData = useCallback(async () => {
     try {
-      // Calculate current week range
       const today = new Date()
-      const weekDates = getWeekDates(today)
-      const startDate = formatDate(weekDates[0])
-      // Extend endDate to 3 months for affectations
-      const endDate = new Date(today)
-      endDate.setMonth(endDate.getMonth() + 3)
-      const endDateStr = formatDate(endDate)
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const startDate = formatDate(start)
+      const end = new Date(today.getFullYear(), today.getMonth() + 4, 0)
+      const endDateStr = formatDate(end)
 
-      const [periodesRes, specRes, affRes, vacRes] = await Promise.all([
+      const [periodesRes, specRes, affRes, vacRes, absRes] = await Promise.all([
         fetch(`/api/remplacants/${id}/disponibilites/periodes`),
         fetch(`/api/remplacants/${id}/disponibilites/specifiques?startDate=${startDate}&endDate=${endDateStr}`),
         fetch(`/api/remplacants/${id}/affectations?startDate=${startDate}&endDate=${endDateStr}`),
         fetch(`/api/vacances-scolaires?startDate=${startDate}&endDate=${endDateStr}`),
+        fetch(`/api/remplacants/${id}/absences?startDate=${startDate}&endDate=${endDateStr}`),
       ])
 
       if (periodesRes.ok) {
@@ -115,6 +150,10 @@ export default function RemplacantDetailPage() {
         const { data } = await vacRes.json()
         setVacances(data)
       }
+      if (absRes.ok) {
+        const { data } = await absRes.json()
+        setAbsencesRempl(data || [])
+      }
     } catch (error) {
       console.error('Error fetching planning data:', error)
     }
@@ -123,11 +162,13 @@ export default function RemplacantDetailPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [remplacantRes, remarquesRes, observateursRes, collaborateursRes] = await Promise.all([
+        const [remplacantRes, remarquesRes, seancesRes, collaborateursRes, remplacantsRes, ecolesRes] = await Promise.all([
           fetch(`/api/remplacants/${id}`),
           fetch(`/api/remplacants/${id}/remarques`),
-          fetch(`/api/remplacants/${id}/observateurs`),
+          fetch(`/api/remplacants/${id}/observations`),
           fetch('/api/collaborateurs'),
+          fetch('/api/remplacants'),
+          fetch('/api/ecoles'),
         ])
 
         if (!remplacantRes.ok) {
@@ -152,13 +193,18 @@ export default function RemplacantDetailPage() {
         const remarquesData = await remarquesRes.json()
         setRemarques(remarquesData.data || [])
 
-        const observateursData = await observateursRes.json()
-        setObservateurs(observateursData.data || [])
+        const seancesData = await seancesRes.json()
+        setSeances(seancesData.data || [])
 
         const collaborateursData = await collaborateursRes.json()
         setCollaborateurs(collaborateursData.data || [])
 
-        // Fetch planning data
+        const remplacantsData = await remplacantsRes.json()
+        setRemplacantsList(remplacantsData.data || [])
+
+        const ecolesData = await ecolesRes.json()
+        setEcolesList(ecolesData.data || [])
+
         await fetchPlanningData()
       } catch (error) {
         console.error('Error fetching remplacant:', error)
@@ -221,37 +267,55 @@ export default function RemplacantDetailPage() {
     }
   }
 
-  const handleAddObservateur = async (e: React.FormEvent) => {
+  const resetSeanceForm = () => {
+    setSeanceDate('')
+    setSeanceCreneau('matin')
+    setSeanceEcoleId('')
+    setSeanceEcoleSearch('')
+    setSeanceObservateurType('collaborateur')
+    setSeanceObservateurId('')
+    setSeanceObservateurSearch('')
+    setSeanceNote('')
+  }
+
+  const handleAddSeance = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedCollaborateurId) return
+    if (!seanceDate || !seanceCreneau || !seanceEcoleId || !seanceObservateurId) return
     try {
-      const res = await fetch(`/api/remplacants/${id}/observateurs`, {
+      const res = await fetch(`/api/remplacants/${id}/observations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collaborateurId: parseInt(selectedCollaborateurId) }),
+        body: JSON.stringify({
+          date: seanceDate,
+          creneau: seanceCreneau,
+          ecoleId: parseInt(seanceEcoleId),
+          observateurType: seanceObservateurType,
+          observateurId: parseInt(seanceObservateurId),
+          note: seanceNote,
+        }),
       })
       if (res.ok) {
         const data = await res.json()
-        setObservateurs(prev => [...prev, data.data])
-        setSelectedCollaborateurId('')
-        setShowAddObservateur(false)
+        setSeances(prev => [data.data, ...prev])
+        resetSeanceForm()
+        setShowAddSeance(false)
       }
     } catch (error) {
-      console.error('Error adding observateur:', error)
+      console.error('Error adding seance:', error)
     }
   }
 
-  const handleRemoveObservateur = async (observateurId: number) => {
-    if (!confirm('Retirer cet observateur ?')) return
+  const handleRemoveSeance = async (seanceId: number) => {
+    if (!confirm('Supprimer cette séance d\'observation ?')) return
     try {
-      const res = await fetch(`/api/remplacants/${id}/observateurs?observateurId=${observateurId}`, {
+      const res = await fetch(`/api/remplacants/${id}/observations?seanceId=${seanceId}`, {
         method: 'DELETE',
       })
       if (res.ok) {
-        setObservateurs(prev => prev.filter(o => o.id !== observateurId))
+        setSeances(prev => prev.filter(s => s.id !== seanceId))
       }
     } catch (error) {
-      console.error('Error removing observateur:', error)
+      console.error('Error removing seance:', error)
     }
   }
 
@@ -338,17 +402,122 @@ export default function RemplacantDetailPage() {
     await fetchPlanningData()
   }
 
-  // Filter out collaborateurs already observateurs
-  const availableCollaborateurs = collaborateurs.filter(
-    c => !observateurs.some(o => o.collaborateurId === c.id)
-  )
+  // ─── Absence handlers ─────────────────────────────────────
+  const handleSaveAbsence = async (data: {
+    dateDebut: string
+    dateFin: string
+    creneau: Creneau
+    motif: string
+    motifDetails?: string
+  }) => {
+    if (editingAbsence) {
+      const res = await fetch(`/api/remplacants/${id}/absences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ absenceId: editingAbsence.id, ...data }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        alert(error || 'Erreur lors de la modification')
+        return
+      }
+    } else {
+      const res = await fetch(`/api/remplacants/${id}/absences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        alert(error || 'Erreur lors de la création')
+        return
+      }
+    }
+    setEditingAbsence(null)
+    await fetchPlanningData()
+  }
 
-  // Filter by search term
-  const filteredCollaborateurs = availableCollaborateurs.filter(c => {
-    if (!observateurSearch.trim()) return true
-    const search = observateurSearch.toLowerCase()
-    return c.lastName.toLowerCase().includes(search) || c.firstName.toLowerCase().includes(search)
-  }).slice(0, 10) // Limit to 10 results
+  const handleDeleteAbsence = async (absenceId: number) => {
+    if (!confirm('Supprimer cette absence ?')) return
+    try {
+      const res = await fetch(`/api/remplacants/${id}/absences?absenceId=${absenceId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchPlanningData()
+      }
+    } catch (error) {
+      console.error('Error deleting absence:', error)
+    }
+  }
+
+  // ─── Affectation delete handler ──────────────────────────
+  const handleDeleteAffectation = async (affectationId: number) => {
+    if (!confirm('Supprimer cette affectation ?')) return
+    try {
+      const res = await fetch(`/api/remplacants/${id}/affectations?affectationId=${affectationId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await fetchPlanningData()
+      }
+    } catch (error) {
+      console.error('Error deleting affectation:', error)
+    }
+  }
+
+  // ─── Replacement handler ─────────────────────────────────
+  const handleSaveReplacement = async (data: {
+    collaborateurId: number
+    remplacantId: number
+    dateDebut: string
+    dateFin: string
+    entries: { ecoleId: number; date: string; creneau: Creneau }[]
+    motif: string
+    motifDetails?: string
+  }) => {
+    const res = await fetch(`/api/collaborateurs/${data.collaborateurId}/remplacements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        remplacantId: data.remplacantId,
+        dateDebut: data.dateDebut,
+        dateFin: data.dateFin,
+        entries: data.entries,
+        motif: data.motif,
+        motifDetails: data.motifDetails,
+      }),
+    })
+
+    if (!res.ok) {
+      const { error } = await res.json()
+      alert(error || 'Erreur lors de la création du remplacement')
+      throw new Error(error)
+    }
+
+    await fetchPlanningData()
+  }
+
+  // Filter écoles by search
+  const filteredEcoles = ecolesList.filter(e => {
+    if (!seanceEcoleSearch.trim()) return true
+    return e.name.toLowerCase().includes(seanceEcoleSearch.toLowerCase())
+  }).slice(0, 10)
+
+  // Filter observateurs by search and type
+  const observateurOptions = seanceObservateurType === 'collaborateur' ? collaborateurs : remplacantsList
+  const filteredObservateurs = observateurOptions.filter(p => {
+    if (!seanceObservateurSearch.trim()) return true
+    const search = seanceObservateurSearch.toLowerCase()
+    return p.lastName.toLowerCase().includes(search) || p.firstName.toLowerCase().includes(search)
+  }).slice(0, 10)
+
+  const getObservateurName = (seance: SeanceObservation) => {
+    if (seance.observateurType === 'collaborateur') {
+      return `${seance.observateurCollaborateurFirstName} ${seance.observateurCollaborateurLastName}`
+    }
+    return `${seance.observateurRemplacantFirstName} ${seance.observateurRemplacantLastName}`
+  }
 
   if (loading) {
     return (
@@ -381,10 +550,26 @@ export default function RemplacantDetailPage() {
               Retour
             </Link>
             {!isEditMode && (
-              <button onClick={() => setIsEditMode(true)} className="btn btn-primary">
-                <PencilIcon className="w-4 h-4 mr-2" />
-                Modifier
-              </button>
+              <>
+                <button
+                  onClick={() => { setEditingAbsence(null); setShowAbsenceModal(true) }}
+                  className="btn btn-secondary"
+                >
+                  <PlusIcon className="w-4 h-4 mr-2" />
+                  Déclarer une absence
+                </button>
+                <button
+                  onClick={() => setShowReplacementModal(true)}
+                  className="btn btn-secondary"
+                >
+                  <CalendarDaysIcon className="w-4 h-4 mr-2" />
+                  Annoncer un remplacement
+                </button>
+                <button onClick={() => setIsEditMode(true)} className="btn btn-primary">
+                  <PencilIcon className="w-4 h-4 mr-2" />
+                  Modifier
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -418,9 +603,9 @@ export default function RemplacantDetailPage() {
         </nav>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        {/* Tab: Informations */}
-        {activeTab === 'informations' && (
+      {/* Tab: Informations — wrapped in form for edit mode */}
+      {activeTab === 'informations' && (
+        <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_440px] gap-10">
             {/* Left column */}
             <div className="space-y-4">
@@ -531,38 +716,54 @@ export default function RemplacantDetailPage() {
                 </div>
               </div>
 
-              {/* Observateurs section */}
+              {/* Séances d'observation section */}
               <div className="ds-table-container">
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
                     <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-2">
                       <EyeIcon className="w-4 h-4" />
-                      Observateurs ({observateurs.length})
+                      Séances d&apos;observation ({seances.length})
                     </h2>
-                    <button type="button" onClick={() => setShowAddObservateur(true)} className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1">
+                    <button type="button" onClick={() => setShowAddSeance(true)} className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1">
                       <PlusIcon className="w-4 h-4" /> Ajouter
                     </button>
                   </div>
-                  {observateurs.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Aucun observateur.</p>
+                  {seances.length === 0 ? (
+                    <p className="text-gray-500 text-sm">Aucune séance d&apos;observation.</p>
                   ) : (
                     <div className="space-y-2">
-                      {observateurs.map((obs) => (
-                        <div key={obs.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                          <div>
-                            <span className="text-sm font-medium text-gray-900">
-                              {obs.collaborateurFirstName} {obs.collaborateurLastName}
-                            </span>
-                            {obs.collaborateurEmail && (
-                              <span className="text-xs text-gray-500 ml-2">{obs.collaborateurEmail}</span>
+                      {seances.map((seance) => (
+                        <div key={seance.id} className="flex items-start justify-between bg-gray-50 rounded-lg px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-gray-900">
+                                {new Date(seance.date).toLocaleDateString('fr-FR')}
+                              </span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                                {CRENEAU_LABELS[seance.creneau as Creneau] || seance.creneau}
+                              </span>
+                              <span className="text-sm text-gray-600">{seance.ecoleName}</span>
+                            </div>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-sm text-gray-700">{getObservateurName(seance)}</span>
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                seance.observateurType === 'collaborateur'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-orange-100 text-orange-700'
+                              }`}>
+                                {seance.observateurType === 'collaborateur' ? 'Collab.' : 'Rempl.'}
+                              </span>
+                            </div>
+                            {seance.note && (
+                              <p className="mt-1 text-xs text-gray-500">{seance.note}</p>
                             )}
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleRemoveObservateur(obs.id)}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            onClick={() => handleRemoveSeance(seance.id)}
+                            className="text-gray-400 hover:text-red-600 transition-colors ml-2 flex-shrink-0"
                           >
-                            <XMarkIcon className="w-4 h-4" />
+                            <TrashIcon className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
@@ -597,7 +798,23 @@ export default function RemplacantDetailPage() {
               </div>
             </div>
           </div>
-        )}
+
+          {/* Actions - only in edit mode */}
+          {isEditMode && (
+            <div className="flex justify-between items-center mt-4">
+              <button type="button" onClick={handleDelete} className="text-gray-400 hover:text-red-600 p-2 transition-colors" title="Supprimer">
+                <TrashIcon className="w-5 h-5" />
+              </button>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsEditMode(false)} className="btn btn-secondary">Annuler</button>
+                <button type="submit" disabled={saving} className="btn btn-primary">
+                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
+      )}
 
         {/* Tab: Planning */}
         {activeTab === 'planning' && (
@@ -615,10 +832,76 @@ export default function RemplacantDetailPage() {
                     periodes={periodes}
                     specifiques={specifiques}
                     affectations={affectations}
+                    absences={absencesRempl}
                     vacances={vacances}
                     onRefresh={fetchPlanningData}
-                    readOnly={!isEditMode}
                   />
+                </div>
+              </div>
+
+              {/* Absences section */}
+              <div className="ds-table-container">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-2">
+                      Absences ({absencesRempl.length})
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingAbsence(null); setShowAbsenceModal(true) }}
+                      className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Ajouter
+                    </button>
+                  </div>
+                  {absencesRempl.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">Aucune absence</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {absencesRempl.map((abs: AbsenceData & { affectationsImpactees?: Array<{ id: number; collaborateurPrenom: string | null; collaborateurNom: string | null; ecoleNom: string | null; dateDebut: string; dateFin: string; creneau: Creneau }> }) => (
+                        <div key={abs.id} className="bg-red-50 rounded-lg px-3 py-2 text-sm">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-red-800">
+                                {new Date(abs.dateDebut).toLocaleDateString('fr-FR')}
+                                {abs.dateDebut !== abs.dateFin && ` - ${new Date(abs.dateFin).toLocaleDateString('fr-FR')}`}
+                                {' • '}{CRENEAU_LABELS[abs.creneau]}
+                              </div>
+                              <div className="text-red-600">
+                                {MOTIF_LABELS[abs.motif] || abs.motif}
+                                {abs.motifDetails && ` — ${abs.motifDetails}`}
+                              </div>
+                              {abs.affectationsImpactees && abs.affectationsImpactees.length > 0 && (
+                                <div className="mt-1 text-xs text-orange-600">
+                                  Affectations impactées : {abs.affectationsImpactees.map(a =>
+                                    `${a.collaborateurPrenom} ${a.collaborateurNom} (${a.ecoleNom})`
+                                  ).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingAbsence(abs); setShowAbsenceModal(true) }}
+                                className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                                title="Modifier"
+                              >
+                                <PencilIcon className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAbsence(abs.id)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                title="Supprimer"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -632,13 +915,25 @@ export default function RemplacantDetailPage() {
                     <div className="space-y-2">
                       {affectations.slice(0, 10).map((aff) => (
                         <div key={aff.id} className="bg-purple-50 rounded-lg px-3 py-2 text-sm">
-                          <div className="font-medium text-purple-800">
-                            {new Date(aff.dateDebut).toLocaleDateString('fr-FR')}
-                            {aff.dateDebut !== aff.dateFin && ` - ${new Date(aff.dateFin).toLocaleDateString('fr-FR')}`}
-                            {' • '}{CRENEAU_LABELS[aff.creneau]}
-                          </div>
-                          <div className="text-purple-600">
-                            Remplace {aff.collaborateurPrenom} {aff.collaborateurNom} ({aff.ecoleNom})
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium text-purple-800">
+                                {new Date(aff.dateDebut).toLocaleDateString('fr-FR')}
+                                {aff.dateDebut !== aff.dateFin && ` - ${new Date(aff.dateFin).toLocaleDateString('fr-FR')}`}
+                                {' • '}{CRENEAU_LABELS[aff.creneau]}
+                              </div>
+                              <div className="text-purple-600">
+                                Remplace {aff.collaborateurPrenom} {aff.collaborateurNom} ({aff.ecoleNom})
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAffectation(aff.id)}
+                              className="p-1 text-gray-400 hover:text-red-600 transition-colors flex-shrink-0"
+                              title="Supprimer"
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -672,21 +967,22 @@ export default function RemplacantDetailPage() {
           </div>
         )}
 
-        {/* Actions - only in edit mode */}
-        {isEditMode && (
-          <div className="flex justify-between items-center mt-4">
-            <button type="button" onClick={handleDelete} className="text-gray-400 hover:text-red-600 p-2 transition-colors" title="Supprimer">
-              <TrashIcon className="w-5 h-5" />
-            </button>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setIsEditMode(false)} className="btn btn-secondary">Annuler</button>
-              <button type="submit" disabled={saving} className="btn btn-primary">
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-            </div>
-          </div>
-        )}
-      </form>
+
+      {/* Modal Absence */}
+      <AbsenceModal
+        isOpen={showAbsenceModal}
+        onClose={() => { setShowAbsenceModal(false); setEditingAbsence(null) }}
+        onSave={handleSaveAbsence}
+        editingAbsence={editingAbsence || undefined}
+      />
+
+      {/* Modal Remplacement */}
+      <RemplacantReplacementModal
+        remplacantId={parseInt(id)}
+        isOpen={showReplacementModal}
+        onClose={() => setShowReplacementModal(false)}
+        onSave={handleSaveReplacement}
+      />
 
       {/* Add Remarque Modal */}
       {showAddRemarque && (
@@ -724,65 +1020,161 @@ export default function RemplacantDetailPage() {
         </div>
       )}
 
-      {/* Add Observateur Modal */}
-      {showAddObservateur && (
+      {/* Add Séance Modal */}
+      {showAddSeance && (
         <div className="modal-overlay">
           <div className="modal-container max-w-lg">
             <div className="modal-header">
               <div className="modal-header-content">
-                <h3 className="modal-title">Ajouter un observateur</h3>
-                <button onClick={() => { setShowAddObservateur(false); setObservateurSearch(''); setSelectedCollaborateurId(''); }} className="modal-close-button"><XMarkIcon className="h-5 w-5" /></button>
+                <h3 className="modal-title">Ajouter une séance d&apos;observation</h3>
+                <button onClick={() => { setShowAddSeance(false); resetSeanceForm(); }} className="modal-close-button"><XMarkIcon className="h-5 w-5" /></button>
               </div>
             </div>
-            <form onSubmit={handleAddObservateur}>
-              <div className="modal-body">
+            <form onSubmit={handleAddSeance}>
+              <div className="modal-body space-y-4">
+                {/* Date */}
                 <div className="form-group">
-                  <label className="form-label">Rechercher un collaborateur *</label>
-                  <input
-                    type="text"
-                    value={observateurSearch}
-                    onChange={(e) => { setObservateurSearch(e.target.value); setSelectedCollaborateurId(''); }}
-                    className="form-input"
-                    placeholder="Nom ou prénom..."
-                    autoFocus
-                  />
+                  <label className="form-label">Date *</label>
+                  <DatePicker value={seanceDate} onChange={setSeanceDate} />
                 </div>
-                {selectedCollaborateurId && (
-                  <div className="mt-2 p-2 bg-purple-50 rounded-md flex items-center justify-between">
-                    <span className="text-sm font-medium text-purple-700">
-                      {availableCollaborateurs.find(c => c.id === parseInt(selectedCollaborateurId))?.firstName} {availableCollaborateurs.find(c => c.id === parseInt(selectedCollaborateurId))?.lastName}
-                    </span>
-                    <button type="button" onClick={() => setSelectedCollaborateurId('')} className="text-purple-500 hover:text-purple-700">
-                      <XMarkIcon className="w-4 h-4" />
+
+                {/* Créneau */}
+                <div className="form-group">
+                  <label className="form-label">Créneau *</label>
+                  <select value={seanceCreneau} onChange={(e) => setSeanceCreneau(e.target.value)} className="form-input">
+                    <option value="matin">Matin</option>
+                    <option value="apres_midi">Après-midi</option>
+                    <option value="journee">Journée</option>
+                  </select>
+                </div>
+
+                {/* École */}
+                <div className="form-group">
+                  <label className="form-label">École *</label>
+                  {seanceEcoleId ? (
+                    <div className="p-2 bg-purple-50 rounded-md flex items-center justify-between">
+                      <span className="text-sm font-medium text-purple-700">
+                        {ecolesList.find(e => e.id === parseInt(seanceEcoleId))?.name}
+                      </span>
+                      <button type="button" onClick={() => setSeanceEcoleId('')} className="text-purple-500 hover:text-purple-700">
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={seanceEcoleSearch}
+                        onChange={(e) => setSeanceEcoleSearch(e.target.value)}
+                        className="form-input"
+                        placeholder="Rechercher une école..."
+                      />
+                      {seanceEcoleSearch.trim() && filteredEcoles.length > 0 && (
+                        <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto">
+                          {filteredEcoles.map((e) => (
+                            <button
+                              key={e.id}
+                              type="button"
+                              onClick={() => { setSeanceEcoleId(String(e.id)); setSeanceEcoleSearch(''); }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0"
+                            >
+                              {e.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Type observateur */}
+                <div className="form-group">
+                  <label className="form-label">Type d&apos;observateur *</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setSeanceObservateurType('collaborateur'); setSeanceObservateurId(''); setSeanceObservateurSearch(''); }}
+                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                        seanceObservateurType === 'collaborateur'
+                          ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Collaborateur
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSeanceObservateurType('remplacant'); setSeanceObservateurId(''); setSeanceObservateurSearch(''); }}
+                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                        seanceObservateurType === 'remplacant'
+                          ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Remplaçant
                     </button>
                   </div>
-                )}
-                {!selectedCollaborateurId && observateurSearch.trim() && filteredCollaborateurs.length > 0 && (
-                  <div className="mt-2 border border-gray-200 rounded-md max-h-48 overflow-y-auto">
-                    {filteredCollaborateurs.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => { setSelectedCollaborateurId(String(c.id)); setObservateurSearch(''); }}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0"
-                      >
-                        <span className="font-medium">{c.firstName} {c.lastName}</span>
+                </div>
+
+                {/* Observateur */}
+                <div className="form-group">
+                  <label className="form-label">Observateur *</label>
+                  {seanceObservateurId ? (
+                    <div className="p-2 bg-purple-50 rounded-md flex items-center justify-between">
+                      <span className="text-sm font-medium text-purple-700">
+                        {observateurOptions.find(p => p.id === parseInt(seanceObservateurId))?.firstName} {observateurOptions.find(p => p.id === parseInt(seanceObservateurId))?.lastName}
+                      </span>
+                      <button type="button" onClick={() => setSeanceObservateurId('')} className="text-purple-500 hover:text-purple-700">
+                        <XMarkIcon className="w-4 h-4" />
                       </button>
-                    ))}
-                  </div>
-                )}
-                {!selectedCollaborateurId && observateurSearch.trim() && filteredCollaborateurs.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">Aucun collaborateur trouvé.</p>
-                )}
-                {availableCollaborateurs.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">Tous les collaborateurs sont déjà observateurs.</p>
-                )}
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={seanceObservateurSearch}
+                        onChange={(e) => { setSeanceObservateurSearch(e.target.value); setSeanceObservateurId(''); }}
+                        className="form-input"
+                        placeholder="Nom ou prénom..."
+                      />
+                      {seanceObservateurSearch.trim() && filteredObservateurs.length > 0 && (
+                        <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto">
+                          {filteredObservateurs.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => { setSeanceObservateurId(String(p.id)); setSeanceObservateurSearch(''); }}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0"
+                            >
+                              <span className="font-medium">{p.firstName} {p.lastName}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {seanceObservateurSearch.trim() && filteredObservateurs.length === 0 && (
+                        <p className="text-sm text-gray-500 mt-1">Aucun résultat.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Note */}
+                <div className="form-group">
+                  <label className="form-label">Note</label>
+                  <textarea
+                    value={seanceNote}
+                    onChange={(e) => setSeanceNote(e.target.value)}
+                    className="form-input"
+                    rows={2}
+                    placeholder="Note optionnelle..."
+                  />
+                </div>
               </div>
               <div className="modal-footer">
                 <div></div>
                 <div className="modal-footer-actions">
-                  <button type="button" onClick={() => { setShowAddObservateur(false); setObservateurSearch(''); setSelectedCollaborateurId(''); }} className="btn btn-secondary">Annuler</button>
-                  <button type="submit" disabled={!selectedCollaborateurId} className="btn btn-primary">Ajouter</button>
+                  <button type="button" onClick={() => { setShowAddSeance(false); resetSeanceForm(); }} className="btn btn-secondary">Annuler</button>
+                  <button type="submit" disabled={!seanceDate || !seanceEcoleId || !seanceObservateurId} className="btn btn-primary">Ajouter</button>
                 </div>
               </div>
             </form>

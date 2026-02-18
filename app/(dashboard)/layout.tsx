@@ -36,6 +36,7 @@ const navigationSections: NavSection[] = [
       { id: 'collaborateurs', name: 'Collaborateurs', href: '/collaborateurs', icon: UsersIcon },
       { id: 'remplacants', name: 'Remplaçants', href: '/remplacants', icon: UserGroupIcon },
       { id: 'planning', name: 'Planning', href: '/planning', icon: CalendarDaysIcon },
+      { id: 'absences', name: 'Absences', href: '/absences', icon: CalendarDaysIcon },
     ],
   },
   {
@@ -94,6 +95,7 @@ function generateBreadcrumb(pathname: string) {
     'titulaires': 'Titulaires',
     'documentation': 'Documentation',
     'planning': 'Planning',
+    'absences': 'Absences',
   }
 
   let currentPath = ''

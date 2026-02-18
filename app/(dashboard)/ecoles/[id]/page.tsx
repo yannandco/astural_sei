@@ -50,7 +50,9 @@ export default function EcoleDetailPage() {
     directeurId: '',
     directeurLastName: '',
     directeurFirstName: '',
-    address: '',
+    rue: '',
+    codePostal: '',
+    ville: '',
     phone: '',
     email: '',
     isActive: true,
@@ -81,7 +83,9 @@ export default function EcoleDetailPage() {
           directeurId: e.directeurId?.toString() || '',
           directeurLastName: e.directeurLastName || '',
           directeurFirstName: e.directeurFirstName || '',
-          address: e.address || '',
+          rue: e.rue || '',
+          codePostal: e.codePostal || '',
+          ville: e.ville || '',
           phone: e.phone || '',
           email: e.email || '',
           isActive: e.isActive,
@@ -118,7 +122,9 @@ export default function EcoleDetailPage() {
         body: JSON.stringify({
           name: formData.name,
           directeurId: formData.directeurId ? parseInt(formData.directeurId) : null,
-          address: formData.address,
+          rue: formData.rue,
+          codePostal: formData.codePostal,
+          ville: formData.ville,
           phone: formData.phone,
           email: formData.email,
           isActive: formData.isActive,
@@ -258,12 +264,30 @@ export default function EcoleDetailPage() {
                     )}
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Adresse</label>
+                    <label className="form-label">Rue</label>
                     {isEditMode ? (
-                      <input type="text" value={formData.address} onChange={(e) => updateField('address', e.target.value)} className="form-input" />
+                      <input type="text" value={formData.rue} onChange={(e) => updateField('rue', e.target.value)} className="form-input" />
                     ) : (
-                      <div className="py-0.5 text-gray-900">{formData.address || '-'}</div>
+                      <div className="py-0.5 text-gray-900">{formData.rue || '-'}</div>
                     )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label className="form-label">Code postal</label>
+                      {isEditMode ? (
+                        <input type="text" value={formData.codePostal} onChange={(e) => updateField('codePostal', e.target.value)} className="form-input" maxLength={10} />
+                      ) : (
+                        <div className="py-0.5 text-gray-900">{formData.codePostal || '-'}</div>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Ville</label>
+                      {isEditMode ? (
+                        <input type="text" value={formData.ville} onChange={(e) => updateField('ville', e.target.value)} className="form-input" />
+                      ) : (
+                        <div className="py-0.5 text-gray-900">{formData.ville || '-'}</div>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="form-group">

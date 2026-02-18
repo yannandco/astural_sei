@@ -89,11 +89,32 @@ export interface VacancesScolaires {
 
 // État d'une cellule du calendrier
 export type CellStatus =
-  | 'indisponible'       // Gris - par défaut, pas de disponibilité
-  | 'disponible_recurrent' // Vert clair - disponibilité récurrente
-  | 'disponible_specifique' // Vert foncé - disponibilité ponctuelle ajoutée
+  | 'indisponible'           // Gris - par défaut, pas de disponibilité
+  | 'disponible_recurrent'   // Vert clair - disponibilité récurrente
+  | 'disponible_specifique'  // Vert foncé - disponibilité ponctuelle ajoutée
   | 'indisponible_exception' // Rouge - exception (indisponible alors que normalement dispo)
-  | 'affecte'            // Violet - affecté à un collaborateur
+  | 'affecte'                // Violet - affecté à un collaborateur
+  | 'absent_non_remplace'    // Rouge - absent, pas encore couvert
+  | 'absent_remplace'        // Orange atténué - absent mais couvert par un remplaçant
+
+// Absence (collaborateur ou remplaçant)
+export interface AbsenceData {
+  id: number
+  type: 'collaborateur' | 'remplacant'
+  dateDebut: string
+  dateFin: string
+  creneau: Creneau
+  motif: string
+  motifDetails: string | null
+  isRemplacee?: boolean
+}
+
+export const MOTIF_LABELS: Record<string, string> = {
+  maladie: 'Maladie',
+  conge: 'Congé',
+  formation: 'Formation',
+  autre: 'Autre',
+}
 
 export interface CellData {
   date: string
@@ -101,6 +122,7 @@ export interface CellData {
   status: CellStatus
   affectation?: Affectation
   specifique?: DisponibiliteSpecifique
+  absence?: AbsenceData
   isVacances?: boolean
   vacancesNom?: string
 }
@@ -154,7 +176,24 @@ export function calculateCellStatus(
   recurrentes: DisponibiliteRecurrente[],
   specifiques: DisponibiliteSpecifique[],
   affectations: Affectation[],
-): { status: CellStatus; affectation?: Affectation; specifique?: DisponibiliteSpecifique } {
+  absencesData?: AbsenceData[],
+): { status: CellStatus; affectation?: Affectation; specifique?: DisponibiliteSpecifique; absence?: AbsenceData } {
+  // Priorité 0: Vérifier les absences (priorité maximale)
+  if (absencesData) {
+    const absence = absencesData.find(a => {
+      const isInDateRange = date >= a.dateDebut && date <= a.dateFin
+      const isMatchingCreneau = a.creneau === creneau || a.creneau === 'journee' || creneau === 'journee'
+      return isInDateRange && isMatchingCreneau
+    })
+
+    if (absence) {
+      return {
+        status: absence.isRemplacee ? 'absent_remplace' : 'absent_non_remplace',
+        absence,
+      }
+    }
+  }
+
   // Priorité 1: Vérifier les affectations
   const affectation = affectations.find(a => {
     const isInDateRange = date >= a.dateDebut && date <= a.dateFin
@@ -215,7 +254,8 @@ export function calculateCellStatusWithPeriodes(
   periodes: DisponibilitePeriode[],
   specifiques: DisponibiliteSpecifique[],
   affectations: Affectation[],
-): { status: CellStatus; affectation?: Affectation; specifique?: DisponibiliteSpecifique } {
+  absencesData?: AbsenceData[],
+): { status: CellStatus; affectation?: Affectation; specifique?: DisponibiliteSpecifique; absence?: AbsenceData } {
   // Extraire toutes les récurrences des périodes actives pour cette date
   const recurrentes: DisponibiliteRecurrente[] = []
 
@@ -232,5 +272,5 @@ export function calculateCellStatusWithPeriodes(
     }
   }
 
-  return calculateCellStatus(date, creneau, recurrentes, specifiques, affectations)
+  return calculateCellStatus(date, creneau, recurrentes, specifiques, affectations, absencesData)
 }
