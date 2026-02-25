@@ -3,8 +3,8 @@
 export default function PlanningLegend({ greenLabel = 'Disponible', showAbsences = false }: { greenLabel?: string; showAbsences?: boolean }) {
   const items = [
     { color: 'bg-green-100 border-green-300', label: greenLabel },
+    { color: 'bg-gray-100 border-gray-200', label: 'Indisponible' },
     { color: 'bg-purple-100 border-purple-300', label: 'Remplacement' },
-    { color: 'bg-red-100 border-red-300', label: 'Exception' },
     { color: 'bg-amber-100 border-amber-300', label: 'Vacances' },
   ]
 

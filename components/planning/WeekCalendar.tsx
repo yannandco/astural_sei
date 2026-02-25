@@ -10,8 +10,6 @@ import PlanningLegend from './PlanningLegend'
 import {
   Creneau,
   JourSemaine,
-  DisponibilitePeriode,
-  DisponibiliteRecurrente,
   DisponibiliteSpecifique,
   Affectation,
   VacancesScolaires,
@@ -19,12 +17,11 @@ import {
   JOUR_LABELS,
   getWeekDates,
   formatDate,
-  calculateCellStatusWithPeriodes,
+  calculateCellStatus,
 } from './types'
 
 interface WeekCalendarProps {
   remplacantId: number
-  periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
   vacances?: VacancesScolaires[]
@@ -34,7 +31,6 @@ interface WeekCalendarProps {
 
 export default function WeekCalendar({
   remplacantId,
-  periodes,
   specifiques,
   affectations,
   vacances = [],
@@ -113,10 +109,9 @@ export default function WeekCalendar({
   const getCellData = useCallback(
     (date: Date, creneau: Creneau): CellData => {
       const dateStr = formatDate(date)
-      const { status, affectation, specifique } = calculateCellStatusWithPeriodes(
+      const { status, affectation, specifique } = calculateCellStatus(
         dateStr,
         creneau,
-        periodes,
         specifiques,
         affectations
       )
@@ -132,7 +127,7 @@ export default function WeekCalendar({
         vacancesNom,
       }
     },
-    [periodes, specifiques, affectations, isDateInVacances]
+    [specifiques, affectations, isDateInVacances]
   )
 
   const handleCellClick = (data: CellData, event: React.MouseEvent) => {

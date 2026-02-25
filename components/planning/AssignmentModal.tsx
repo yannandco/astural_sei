@@ -88,10 +88,13 @@ export default function AssignmentModal({
 
   // Fetch collaborateur presences when collaborateur changes
   useEffect(() => {
-    if (!collaborateurId || editingAffectation) return
-    setCollabPresences([])
-    setEcoleId('')
-    setCreneau('matin')
+    if (!collaborateurId) return
+    const isEditing = !!editingAffectation
+    if (!isEditing) {
+      setCollabPresences([])
+      setEcoleId('')
+      setCreneau('matin')
+    }
     const fetchPresences = async () => {
       try {
         const res = await fetch(`/api/collaborateurs/${collaborateurId}/planning`)
@@ -104,10 +107,12 @@ export default function AssignmentModal({
           }))
           setCollabPresences(presences)
 
-          // Auto-select école if collaborateur has only one
-          const collabEcoleIds = [...new Set(presences.map(p => p.ecoleId))]
-          if (collabEcoleIds.length === 1) {
-            setEcoleId(collabEcoleIds[0])
+          // Auto-select école if collaborateur has only one (creation mode only)
+          if (!isEditing) {
+            const collabEcoleIds = [...new Set(presences.map(p => p.ecoleId))]
+            if (collabEcoleIds.length === 1) {
+              setEcoleId(collabEcoleIds[0])
+            }
           }
         }
       } catch (error) {

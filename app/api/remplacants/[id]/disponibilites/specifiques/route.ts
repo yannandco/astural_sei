@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, gte, lte } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { remplacantDisponibilitesSpecifiques } from '@/lib/db/schema'
-import { requireAuth, requireRole } from '@/lib/auth/server'
+import { requireAuth, requireAdminOrSelfRemplacant } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -58,14 +58,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // POST - Ajouter une disponibilité spécifique (exception ou ajout ponctuel)
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireRole(['admin'])
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    const { user } = await requireAdminOrSelfRemplacant(remplacantId)
 
     const body = await request.json()
     const { date, creneau, isAvailable, note } = body
@@ -144,14 +144,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 // DELETE - Supprimer une disponibilité spécifique
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireRole(['admin'])
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    await requireAdminOrSelfRemplacant(remplacantId)
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '@/components/ui'
 
 const emptyForm = {
   name: '',
@@ -92,7 +93,7 @@ export default function CreateEtablissementPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                  <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
-import { DatePicker } from '@/components/ui'
+import { DateRangePicker } from '@/components/ui'
 import {
   Creneau, CRENEAU_LABELS, MOTIF_LABELS, JOUR_LABELS,
   JourSemaine, getJourSemaine, formatDate,
-  calculateCellStatusWithPeriodes,
-  DisponibilitePeriode, DisponibiliteSpecifique, Affectation,
+  calculateCellStatus,
+  DisponibiliteSpecifique, Affectation,
 } from './types'
 
 interface JourPresence {
@@ -46,7 +46,6 @@ interface PlanningRemplacant {
   id: number
   lastName: string
   firstName: string
-  periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
 }
@@ -72,10 +71,14 @@ interface ReplacementModalProps {
     entries: { ecoleId: number; date: string; creneau: Creneau }[]
     motif: string
     motifDetails?: string
+    skipAbsenceCreation?: boolean
   }) => Promise<void>
   onUpdate?: (data: { affectationId: number; remplacantId: number }) => Promise<void>
   editingRemplacement?: Remplacement
   prefillDate?: string
+  prefillDateFin?: string
+  prefillCreneau?: Creneau
+  skipMotif?: boolean
 }
 
 export default function ReplacementModal({
@@ -87,6 +90,9 @@ export default function ReplacementModal({
   onUpdate,
   editingRemplacement,
   prefillDate,
+  prefillDateFin,
+  prefillCreneau,
+  skipMotif = false,
 }: ReplacementModalProps) {
   const [saving, setSaving] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
@@ -136,13 +142,27 @@ export default function ReplacementModal({
           const dateStr = formatDate(current)
 
           for (const slot of presenceSlots) {
-            entries.push({
-              date: dateStr,
-              jour,
-              creneau: slot.creneau,
-              ecoleId: slot.ecoleId,
-              ecoleName: slot.ecoleName,
-            })
+            // Si prefillCreneau est matin ou apres_midi, filtrer les créneaux
+            if (prefillCreneau && prefillCreneau !== 'journee') {
+              // Présence 'journee' → ne garder que le créneau sélectionné
+              if (slot.creneau === 'journee' || slot.creneau === prefillCreneau) {
+                entries.push({
+                  date: dateStr,
+                  jour,
+                  creneau: prefillCreneau,
+                  ecoleId: slot.ecoleId,
+                  ecoleName: slot.ecoleName,
+                })
+              }
+            } else {
+              entries.push({
+                date: dateStr,
+                jour,
+                creneau: slot.creneau,
+                ecoleId: slot.ecoleId,
+                ecoleName: slot.ecoleName,
+              })
+            }
           }
         }
       }
@@ -150,26 +170,20 @@ export default function ReplacementModal({
     }
 
     return entries
-  }, [dateDebut, dateFin, presenceByJour])
+  }, [dateDebut, dateFin, presenceByJour, prefillCreneau])
 
   // Group entries by jour for display
   const entriesByJour = useMemo(() => {
     const map = new Map<JourSemaine, { creneau: Creneau; ecoleName: string }[]>()
     for (const entry of computedEntries) {
-      if (!map.has(entry.jour)) {
-        map.set(entry.jour, [])
+      const existing = map.get(entry.jour) || []
+      if (!existing.some(e => e.creneau === entry.creneau && e.ecoleName === entry.ecoleName)) {
+        existing.push({ creneau: entry.creneau, ecoleName: entry.ecoleName })
       }
-    }
-    for (const p of presences) {
-      for (const jp of p.joursPresence) {
-        const existing = map.get(jp.jour)
-        if (existing && !existing.some(e => e.creneau === jp.creneau)) {
-          existing.push({ creneau: jp.creneau, ecoleName: p.ecoleName })
-        }
-      }
+      map.set(entry.jour, existing)
     }
     return map
-  }, [computedEntries, presences])
+  }, [computedEntries])
 
   // Fetch planning data for availability
   const fetchAvailability = useCallback(async (start: string, end: string) => {
@@ -198,18 +212,28 @@ export default function ReplacementModal({
       }))
     }
 
+    const isAvailableStatus = (s: string) => s === 'disponible_specifique'
+
     return planningData.map(r => {
       let availableCount = 0
       for (const entry of computedEntries) {
-        const { status } = calculateCellStatusWithPeriodes(
-          entry.date,
-          entry.creneau,
-          r.periodes,
-          r.specifiques,
-          r.affectations,
-        )
-        if (status === 'disponible_recurrent' || status === 'disponible_specifique') {
-          availableCount++
+        if (entry.creneau === 'journee') {
+          // Pour une journée entière, vérifier matin ET après-midi séparément
+          const matinResult = calculateCellStatus(entry.date, 'matin', r.specifiques, r.affectations)
+          const amResult = calculateCellStatus(entry.date, 'apres_midi', r.specifiques, r.affectations)
+          if (isAvailableStatus(matinResult.status) && isAvailableStatus(amResult.status)) {
+            availableCount++
+          }
+        } else {
+          const { status } = calculateCellStatus(
+            entry.date,
+            entry.creneau,
+            r.specifiques,
+            r.affectations,
+          )
+          if (isAvailableStatus(status)) {
+            availableCount++
+          }
         }
       }
 
@@ -253,7 +277,7 @@ export default function ReplacementModal({
       } else {
         setRemplacantId('')
         setDateDebut(prefillDate || '')
-        setDateFin(prefillDate || '')
+        setDateFin(prefillDateFin || prefillDate || '')
         setMotif('maladie')
         setMotifDetails('')
         setSearchRemplacant('')
@@ -288,6 +312,7 @@ export default function ReplacementModal({
           })),
           motif,
           motifDetails: motifDetails || undefined,
+          skipAbsenceCreation: skipMotif,
         })
       }
       onClose()
@@ -295,6 +320,33 @@ export default function ReplacementModal({
       setSaving(false)
     }
   }
+
+  // Compute per-slot availability for the selected remplaçant
+  const slotAvailability = useMemo(() => {
+    if (!remplacantId || planningData.length === 0 || computedEntries.length === 0) return null
+    const rempl = planningData.find(r => r.id === remplacantId)
+    if (!rempl) return null
+
+    const map = new Map<string, { available: number; total: number }>()
+    const isAvail = (s: string) => s === 'disponible_specifique'
+
+    for (const entry of computedEntries) {
+      const key = `${entry.jour}:${entry.creneau}:${entry.ecoleName}`
+      const current = map.get(key) || { available: 0, total: 0 }
+      current.total++
+
+      if (entry.creneau === 'journee') {
+        const m = calculateCellStatus(entry.date, 'matin', rempl.specifiques, rempl.affectations)
+        const a = calculateCellStatus(entry.date, 'apres_midi', rempl.specifiques, rempl.affectations)
+        if (isAvail(m.status) && isAvail(a.status)) current.available++
+      } else {
+        const { status } = calculateCellStatus(entry.date, entry.creneau, rempl.specifiques, rempl.affectations)
+        if (isAvail(status)) current.available++
+      }
+      map.set(key, current)
+    }
+    return map
+  }, [remplacantId, planningData, computedEntries])
 
   if (!isOpen) return null
 
@@ -336,30 +388,21 @@ export default function ReplacementModal({
             {!isEditMode && (
               <>
                 {/* Dates */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="form-label">Date début *</label>
-                    <DatePicker
-                      value={dateDebut}
-                      onChange={(v) => {
-                        setDateDebut(v)
-                        if (!dateFin || v > dateFin) setDateFin(v)
-                        setRemplacantId('')
-                      }}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Date fin *</label>
-                    <DatePicker
-                      value={dateFin}
-                      onChange={(v) => {
-                        setDateFin(v)
-                        setRemplacantId('')
-                      }}
-                      required
-                    />
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Période *</label>
+                  <DateRangePicker
+                    valueStart={dateDebut}
+                    valueEnd={dateFin}
+                    onChangeStart={(v) => {
+                      setDateDebut(v)
+                      setRemplacantId('')
+                    }}
+                    onChangeEnd={(v) => {
+                      setDateFin(v)
+                      setRemplacantId('')
+                    }}
+                    required
+                  />
                 </div>
 
                 {/* Preview des créneaux détectés */}
@@ -380,11 +423,22 @@ export default function ReplacementModal({
                               return (
                                 <div key={jour} className="bg-white border border-gray-200 rounded px-2.5 py-1.5 text-xs">
                                   <div className="font-medium text-gray-800">{JOUR_LABELS[jour]}</div>
-                                  {slots.map((s, i) => (
-                                    <div key={i} className="text-gray-500">
-                                      {CRENEAU_LABELS[s.creneau]} — {s.ecoleName}
-                                    </div>
-                                  ))}
+                                  {slots.map((s, i) => {
+                                    const avail = slotAvailability?.get(`${jour}:${s.creneau}:${s.ecoleName}`)
+                                    const colorClass = avail
+                                      ? avail.available === avail.total
+                                        ? 'text-green-600'
+                                        : avail.available > 0
+                                          ? 'text-orange-600'
+                                          : 'text-red-500'
+                                      : 'text-gray-500'
+                                    return (
+                                      <div key={i} className={colorClass}>
+                                        {CRENEAU_LABELS[s.creneau]} — {s.ecoleName}
+                                        {avail && <span className="ml-1 opacity-75">({avail.available}/{avail.total})</span>}
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               )
                             })}
@@ -473,7 +527,7 @@ export default function ReplacementModal({
             </div>
 
             {/* Motif + Détails en mode création */}
-            {!isEditMode && (
+            {!isEditMode && !skipMotif && (
               <>
                 <div className="form-group">
                   <label className="form-label">Motif de l'absence *</label>

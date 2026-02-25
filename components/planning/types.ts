@@ -30,28 +30,6 @@ export const CRENEAU_LABELS: Record<Creneau, string> = {
   journee: 'Journée',
 }
 
-// Période de disponibilité récurrente
-export interface DisponibilitePeriode {
-  id: number
-  remplacantId: number
-  nom: string | null
-  dateDebut: string
-  dateFin: string
-  isActive: boolean
-  recurrences: DisponibiliteRecurrente[]
-}
-
-// Disponibilité récurrente (pattern hebdomadaire dans une période)
-export interface DisponibiliteRecurrente {
-  id: number
-  periodeId: number
-  jourSemaine: JourSemaine
-  creneau: Creneau
-  periodeNom?: string | null
-  periodeDebut?: string
-  periodeFin?: string
-}
-
 // Disponibilité spécifique (date ponctuelle)
 export interface DisponibiliteSpecifique {
   id: number
@@ -90,12 +68,13 @@ export interface VacancesScolaires {
 // État d'une cellule du calendrier
 export type CellStatus =
   | 'indisponible'           // Gris - par défaut, pas de disponibilité
-  | 'disponible_recurrent'   // Vert clair - disponibilité récurrente
-  | 'disponible_specifique'  // Vert foncé - disponibilité ponctuelle ajoutée
-  | 'indisponible_exception' // Rouge - exception (indisponible alors que normalement dispo)
+  | 'disponible_specifique'  // Vert - disponibilité marquée
+  | 'indisponible_exception' // Rouge - exception (indisponible explicitement)
   | 'affecte'                // Violet - affecté à un collaborateur
   | 'absent_non_remplace'    // Rouge - absent, pas encore couvert
   | 'absent_remplace'        // Orange atténué - absent mais couvert par un remplaçant
+
+export type UrgencyLevel = 'urgent' | 'warning' | 'normal' | 'no_deadline' | 'replaced'
 
 // Absence (collaborateur ou remplaçant)
 export interface AbsenceData {
@@ -107,6 +86,8 @@ export interface AbsenceData {
   motif: string
   motifDetails: string | null
   isRemplacee?: boolean
+  urgency?: UrgencyLevel
+  joursRestants?: number | null
 }
 
 export const MOTIF_LABELS: Record<string, string> = {
@@ -173,7 +154,6 @@ export function getWeekDates(startDate: Date): Date[] {
 export function calculateCellStatus(
   date: string,
   creneau: Creneau,
-  recurrentes: DisponibiliteRecurrente[],
   specifiques: DisponibiliteSpecifique[],
   affectations: Affectation[],
   absencesData?: AbsenceData[],
@@ -217,60 +197,6 @@ export function calculateCellStatus(
     }
   }
 
-  // Priorité 3: Vérifier les disponibilités récurrentes (avec période)
-  const dateObj = new Date(date)
-  const jourSemaine = getJourSemaine(dateObj)
-
-  if (jourSemaine) {
-    // Filtrer les récurrences qui sont dans une période active pour cette date
-    const recurrente = recurrentes.find(r => {
-      // Vérifier que la récurrence correspond au jour et créneau
-      const matchesJourCreneau = r.jourSemaine === jourSemaine &&
-        (r.creneau === creneau || r.creneau === 'journee' || creneau === 'journee')
-
-      if (!matchesJourCreneau) return false
-
-      // Vérifier que la date est dans la période (si les infos de période sont disponibles)
-      if (r.periodeDebut && r.periodeFin) {
-        return date >= r.periodeDebut && date <= r.periodeFin
-      }
-
-      return true // Si pas d'info de période, considérer comme valide
-    })
-
-    if (recurrente) {
-      return { status: 'disponible_recurrent' }
-    }
-  }
-
   // Par défaut: indisponible
   return { status: 'indisponible' }
-}
-
-// Helper pour calculer le statut avec des périodes complètes
-export function calculateCellStatusWithPeriodes(
-  date: string,
-  creneau: Creneau,
-  periodes: DisponibilitePeriode[],
-  specifiques: DisponibiliteSpecifique[],
-  affectations: Affectation[],
-  absencesData?: AbsenceData[],
-): { status: CellStatus; affectation?: Affectation; specifique?: DisponibiliteSpecifique; absence?: AbsenceData } {
-  // Extraire toutes les récurrences des périodes actives pour cette date
-  const recurrentes: DisponibiliteRecurrente[] = []
-
-  for (const periode of periodes) {
-    if (!periode.isActive) continue
-    if (date < periode.dateDebut || date > periode.dateFin) continue
-
-    for (const rec of periode.recurrences) {
-      recurrentes.push({
-        ...rec,
-        periodeDebut: periode.dateDebut,
-        periodeFin: periode.dateFin,
-      })
-    }
-  }
-
-  return calculateCellStatus(date, creneau, recurrentes, specifiques, affectations, absencesData)
 }

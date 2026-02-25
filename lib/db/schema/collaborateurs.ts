@@ -1,10 +1,11 @@
-import { pgTable, integer, uuid, varchar, text, boolean, timestamp, date, decimal, index } from 'drizzle-orm/pg-core'
+import { pgTable, integer, uuid, varchar, text, boolean, timestamp, date, decimal, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import { users } from './auth'
 import { sectors } from './sectors'
 import { contratTypeEnum, sexeEnum } from './enums'
 
 export const collaborateurs = pgTable('collaborateurs', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   lastName: varchar('last_name', { length: 100 }).notNull(),
   firstName: varchar('first_name', { length: 100 }).notNull(),
   address: text('address'),
@@ -31,6 +32,7 @@ export const collaborateurs = pgTable('collaborateurs', {
   index('collaborateurs_last_name_idx').on(table.lastName),
   index('collaborateurs_is_active_idx').on(table.isActive),
   index('collaborateurs_contrat_type_idx').on(table.contratType),
+  uniqueIndex('collaborateurs_user_id_idx').on(table.userId),
 ])
 
 // ─── Remarques (notes datées avec auteur) ─────────────────────

@@ -1,4 +1,4 @@
-import { pgTable, integer, uuid, varchar, text, boolean, timestamp, date, index } from 'drizzle-orm/pg-core'
+import { pgTable, integer, uuid, varchar, text, boolean, timestamp, date, index, uniqueIndex } from 'drizzle-orm/pg-core'
 import { users } from './auth'
 import { collaborateurs } from './collaborateurs'
 import { ecoles } from './etablissements'
@@ -8,6 +8,7 @@ import { observateurTypeEnum, creneauEnum } from './enums'
 
 export const remplacants = pgTable('remplacants', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   lastName: varchar('last_name', { length: 100 }).notNull(),
   firstName: varchar('first_name', { length: 100 }).notNull(),
   address: text('address'),
@@ -30,6 +31,7 @@ export const remplacants = pgTable('remplacants', {
   index('remplacants_last_name_idx').on(table.lastName),
   index('remplacants_is_active_idx').on(table.isActive),
   index('remplacants_is_available_idx').on(table.isAvailable),
+  uniqueIndex('remplacants_user_id_idx').on(table.userId),
 ])
 
 // ─── Remarques (notes datées avec auteur) ─────────────────────

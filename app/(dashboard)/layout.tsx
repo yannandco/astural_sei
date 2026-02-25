@@ -156,7 +156,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         return res.json()
       })
       .then(data => {
-        if (data?.user) setUser(data.user)
+        if (data?.user) {
+          // Portail users cannot access the admin dashboard
+          if (data.user.role === 'collaborateur' || data.user.role === 'remplacant') {
+            router.push('/portail')
+            return
+          }
+          setUser(data.user)
+        }
       })
       .catch(() => router.push('/login'))
   }, [router])

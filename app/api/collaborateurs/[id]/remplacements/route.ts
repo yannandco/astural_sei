@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, and, gte, lte, desc } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { absences, collaborateurs, remplacantAffectations, remplacants, ecoles } from '@/lib/db/schema'
+import { absences, collaborateurs, remplacantAffectations, remplacants, ecoles, directeurs } from '@/lib/db/schema'
 import { requireAuth, requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -40,6 +40,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         remplacantPrenom: remplacants.firstName,
         ecoleId: remplacantAffectations.ecoleId,
         ecoleNom: ecoles.name,
+        directeurNom: directeurs.lastName,
+        directeurPrenom: directeurs.firstName,
+        directeurEmail: directeurs.email,
+        directeurPhone: directeurs.phone,
+        titulairesNoms: sql<string>`(
+          SELECT string_agg(UPPER(t.last_name) || ' ' || t.first_name, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true
+        )`.as('titulaires_noms'),
+        titulairesEmails: sql<string>`(
+          SELECT string_agg(t.email, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true AND t.email IS NOT NULL
+        )`.as('titulaires_emails'),
+        titulairesPhones: sql<string>`(
+          SELECT string_agg(t.phone, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true AND t.phone IS NOT NULL
+        )`.as('titulaires_phones'),
         dateDebut: remplacantAffectations.dateDebut,
         dateFin: remplacantAffectations.dateFin,
         creneau: remplacantAffectations.creneau,
@@ -49,6 +71,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from(remplacantAffectations)
       .leftJoin(remplacants, eq(remplacantAffectations.remplacantId, remplacants.id))
       .leftJoin(ecoles, eq(remplacantAffectations.ecoleId, ecoles.id))
+      .leftJoin(directeurs, eq(ecoles.directeurId, directeurs.id))
       .where(and(...conditions))
       .orderBy(desc(remplacantAffectations.dateDebut))
 
@@ -75,23 +98,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json()
-    const { remplacantId, dateDebut, dateFin, entries, motif, motifDetails } = body as {
+    const { remplacantId, dateDebut, dateFin, entries, motif, motifDetails, skipAbsenceCreation } = body as {
       remplacantId: number
       dateDebut: string
       dateFin: string
       entries: { ecoleId: number; date: string; creneau: 'matin' | 'apres_midi' | 'journee' }[]
       motif: 'maladie' | 'conge' | 'formation' | 'autre'
       motifDetails?: string
+      skipAbsenceCreation?: boolean
     }
 
-    if (!remplacantId || !dateDebut || !dateFin || !entries || !Array.isArray(entries) || entries.length === 0 || !motif) {
+    if (!remplacantId || !dateDebut || !dateFin || !entries || !Array.isArray(entries) || entries.length === 0 || (!motif && !skipAbsenceCreation)) {
       return NextResponse.json({ error: 'Tous les champs obligatoires doivent être renseignés' }, { status: 400 })
     }
 
     const validCreneaux = ['matin', 'apres_midi', 'journee']
     const validMotifs = ['maladie', 'conge', 'formation', 'autre']
 
-    if (!validMotifs.includes(motif)) {
+    if (!skipAbsenceCreation && !validMotifs.includes(motif)) {
       return NextResponse.json({ error: 'Motif invalide' }, { status: 400 })
     }
 
@@ -130,22 +154,40 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
     }
 
-    // 1. Créer UNE SEULE absence pour toute la période
-    const [createdAbsence] = await db
-      .insert(absences)
-      .values({
-        type: 'collaborateur',
-        collaborateurId,
-        dateDebut,
-        dateFin,
-        creneau: 'journee',
-        motif,
-        motifDetails: motifDetails || null,
-        isActive: true,
-        createdBy: user.id,
-        updatedBy: user.id,
-      })
-      .returning()
+    // 1. Créer UNE SEULE absence pour toute la période (sauf si les absences existent déjà)
+    let createdAbsence = null
+    if (!skipAbsenceCreation) {
+      // Vérifier si une absence existe déjà pour ce collaborateur sur cette période
+      const existingAbsence = await db
+        .select({ id: absences.id })
+        .from(absences)
+        .where(and(
+          eq(absences.collaborateurId, collaborateurId),
+          eq(absences.isActive, true),
+          lte(absences.dateDebut, dateFin),
+          gte(absences.dateFin, dateDebut),
+        ))
+        .limit(1)
+
+      if (existingAbsence.length === 0) {
+        const [abs] = await db
+          .insert(absences)
+          .values({
+            type: 'collaborateur',
+            collaborateurId,
+            dateDebut,
+            dateFin,
+            creneau: 'journee',
+            motif,
+            motifDetails: motifDetails || null,
+            isActive: true,
+            createdBy: user.id,
+            updatedBy: user.id,
+          })
+          .returning()
+        createdAbsence = abs
+      }
+    }
 
     // 2. Créer une affectation par entrée (une par date/créneau spécifique)
     const createdAffectations = []
@@ -160,7 +202,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           dateDebut: entry.date,
           dateFin: entry.date,
           creneau: entry.creneau,
-          motif,
+          motif: motif || 'autre',
           isActive: true,
           createdBy: user.id,
           updatedBy: user.id,

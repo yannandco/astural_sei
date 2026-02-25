@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, AcademicCapIcon, TrashIcon, PlusIcon, XMarkIcon, PencilIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import { EcoleMonthCalendar } from '@/components/planning'
+import { PhoneInput } from '@/components/ui'
 
 interface Classe { id: number; name: string; isActive: boolean }
 interface Directeur { id: number; lastName: string; firstName: string }
@@ -55,6 +56,7 @@ export default function EcoleDetailPage() {
     ville: '',
     phone: '',
     email: '',
+    remplacementApresJours: '',
     isActive: true,
   })
 
@@ -88,6 +90,7 @@ export default function EcoleDetailPage() {
           ville: e.ville || '',
           phone: e.phone || '',
           email: e.email || '',
+          remplacementApresJours: e.remplacementApresJours?.toString() || '',
           isActive: e.isActive,
         })
 
@@ -127,6 +130,7 @@ export default function EcoleDetailPage() {
           ville: formData.ville,
           phone: formData.phone,
           email: formData.email,
+          remplacementApresJours: formData.remplacementApresJours || null,
           isActive: formData.isActive,
         }),
       })
@@ -293,7 +297,7 @@ export default function EcoleDetailPage() {
                     <div className="form-group">
                       <label className="form-label">Téléphone</label>
                       {isEditMode ? (
-                        <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                        <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                       ) : (
                         <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                       )}
@@ -421,6 +425,41 @@ export default function EcoleDetailPage() {
 
           {/* Right */}
           <div className="space-y-4">
+            {/* Délai de remplacement - prominent card */}
+            <div className="ds-table-container border-purple-200">
+              <div className="p-5">
+                <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider mb-4 pb-2 border-b border-purple-100">Délai de remplacement</h2>
+                {isEditMode ? (
+                  <div className="form-group">
+                    <label className="form-label">Nombre de jours</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={formData.remplacementApresJours}
+                      onChange={(e) => updateField('remplacementApresJours', e.target.value)}
+                      className="form-input"
+                      placeholder="Ex: 1.5"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Nombre de jours après le début d&apos;une absence pour trouver un remplaçant
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    {formData.remplacementApresJours !== '' ? (
+                      <>
+                        <span className="text-3xl font-bold text-purple-700">{formData.remplacementApresJours}</span>
+                        <span className="text-sm text-gray-600">jour{parseFloat(formData.remplacementApresJours) > 1 ? 's' : ''} pour remplacer</span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-400 italic">Non défini</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="ds-table-container">
               <div className="p-5">
                 <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">Statut</h2>

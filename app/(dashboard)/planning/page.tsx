@@ -6,7 +6,6 @@ import { CalendarDaysIcon, CheckIcon, XMarkIcon, ArrowRightIcon, UserGroupIcon, 
 import {
   WeekNavigation,
   PlanningLegend,
-  DisponibilitePeriode,
   DisponibiliteSpecifique,
   Affectation,
   AbsenceData,
@@ -19,7 +18,7 @@ import {
   MOTIF_LABELS,
   getWeekDates,
   formatDate,
-  calculateCellStatusWithPeriodes,
+  calculateCellStatus,
   getJourSemaine,
 } from '@/components/planning'
 
@@ -30,7 +29,6 @@ interface RemplacantPlanning {
   lastName: string
   firstName: string
   isAvailable: boolean
-  periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
   absences: AbsenceData[]
@@ -83,7 +81,6 @@ interface CollaborateurPlanning {
 
 const STATUS_STYLES: Record<CellStatus, string> = {
   indisponible: 'bg-gray-100 text-gray-400',
-  disponible_recurrent: 'bg-green-100 text-green-700',
   disponible_specifique: 'bg-green-200 text-green-800',
   indisponible_exception: 'bg-red-100 text-red-700',
   affecte: 'bg-purple-100 text-purple-700',
@@ -198,10 +195,9 @@ export default function PlanningPage() {
       affectation?: Affectation
       absence?: AbsenceData
     } => {
-      const { status, affectation, absence } = calculateCellStatusWithPeriodes(
+      const { status, affectation, absence } = calculateCellStatus(
         date,
         creneau,
-        remplacant.periodes,
         remplacant.specifiques,
         remplacant.affectations,
         remplacant.absences?.length > 0 ? remplacant.absences : undefined
@@ -493,7 +489,7 @@ export default function PlanningPage() {
                               }
 
                               // Disponible - montrer checkmark
-                              if (status === 'disponible_recurrent' || status === 'disponible_specifique') {
+                              if (status === 'disponible_specifique') {
                                 return (
                                   <td
                                     key={`${dateStr}-${creneau}`}
@@ -731,7 +727,6 @@ export default function PlanningPage() {
 // Helper component for cell icons
 function CellIcon({ status }: { status: CellStatus }) {
   switch (status) {
-    case 'disponible_recurrent':
     case 'disponible_specifique':
       return <CheckIcon className="w-4 h-4 mx-auto" />
     case 'indisponible_exception':

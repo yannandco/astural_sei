@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserPlusIcon } from '@heroicons/react/24/outline'
-import { DatePicker } from '@/components/ui'
+import { DatePicker, PhoneInput } from '@/components/ui'
 
 interface Sector {
   id: number
@@ -144,7 +144,7 @@ export default function CreateCollaborateurPage() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Mobile professionnel</label>
-                    <input type="tel" value={formData.mobilePro} onChange={(e) => updateField('mobilePro', e.target.value)} className="form-input" />
+                    <PhoneInput value={formData.mobilePro} onChange={(value) => updateField('mobilePro', value)} />
                   </div>
                 </div>
               </div>

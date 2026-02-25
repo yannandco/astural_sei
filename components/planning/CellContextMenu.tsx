@@ -17,7 +17,7 @@ interface CellContextMenuProps {
   onAddException: () => void
   onRemoveException: () => void
   onAddPonctuel: () => void
-  onCreateAffectation: () => void
+  onCreateAffectation?: () => void
   onViewAffectation?: () => void
   onDeleteAffectation?: () => void
 }
@@ -65,22 +65,6 @@ export default function CellContextMenu({
 
   const renderMenuItems = () => {
     switch (data.status) {
-      case 'disponible_recurrent':
-        return (
-          <>
-            <MenuItem
-              icon={<XMarkIcon className="w-4 h-4" />}
-              label="Ajouter exception (indisponible)"
-              onClick={onAddException}
-            />
-            <MenuItem
-              icon={<CalendarIcon className="w-4 h-4" />}
-              label="Créer affectation"
-              onClick={onCreateAffectation}
-            />
-          </>
-        )
-
       case 'disponible_specifique':
         return (
           <>
@@ -90,11 +74,13 @@ export default function CellContextMenu({
               onClick={onRemoveException}
               danger
             />
-            <MenuItem
-              icon={<CalendarIcon className="w-4 h-4" />}
-              label="Créer affectation"
-              onClick={onCreateAffectation}
-            />
+            {onCreateAffectation && (
+              <MenuItem
+                icon={<CalendarIcon className="w-4 h-4" />}
+                label="Créer affectation"
+                onClick={onCreateAffectation}
+              />
+            )}
           </>
         )
 

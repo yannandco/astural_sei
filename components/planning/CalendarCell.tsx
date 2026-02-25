@@ -5,15 +5,15 @@ import { XMarkIcon, CheckIcon, ArrowRightIcon, ExclamationTriangleIcon } from '@
 
 interface CalendarCellProps {
   data: CellData
-  onClick?: (data: CellData) => void
+  onClick?: (data: CellData, event?: React.MouseEvent) => void
   showCreneauLabel?: boolean
   compact?: boolean
   isToday?: boolean
+  isSelected?: boolean
 }
 
 const STATUS_STYLES: Record<CellStatus, string> = {
   indisponible: 'bg-gray-100 border-gray-200 text-gray-400',
-  disponible_recurrent: 'bg-green-100 border-green-300 text-green-700',
   disponible_specifique: 'bg-green-200 border-green-400 text-green-800',
   indisponible_exception: 'bg-red-100 border-red-300 text-red-700',
   affecte: 'bg-purple-100 border-purple-300 text-purple-700',
@@ -25,7 +25,6 @@ const VACANCES_STYLES = 'bg-amber-100 border-amber-300 text-amber-700'
 
 const STATUS_HOVER: Record<CellStatus, string> = {
   indisponible: 'hover:bg-gray-200',
-  disponible_recurrent: 'hover:bg-green-200',
   disponible_specifique: 'hover:bg-green-300',
   indisponible_exception: 'hover:bg-red-200',
   affecte: 'hover:bg-purple-200',
@@ -39,26 +38,29 @@ export default function CalendarCell({
   showCreneauLabel = false,
   compact = false,
   isToday = false,
+  isSelected = false,
 }: CalendarCellProps) {
   const { status, affectation, specifique, isVacances, vacancesNom } = data
 
   // Vacances override les styles de statut
   const styleClasses = isVacances ? VACANCES_STYLES : STATUS_STYLES[status]
   const hoverClasses = isVacances ? 'hover:bg-amber-200' : STATUS_HOVER[status]
+  const selectionClasses = isSelected ? 'ring-2 ring-purple-500 ring-offset-1' : ''
 
   const baseClasses = `
     rounded
     ${compact ? 'p-1 text-[10px]' : 'p-2 text-sm'}
     ${styleClasses}
     border
-    ${onClick ? `cursor-pointer ${hoverClasses}` : ''}
+    ${onClick ? `cursor-pointer ${!isSelected ? hoverClasses : ''}` : ''}
+    ${selectionClasses}
     transition-colors
     relative
   `
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     if (onClick) {
-      onClick(data)
+      onClick(data, e)
     }
   }
 

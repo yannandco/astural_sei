@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
 import CalendarCell from './CalendarCell'
 import CellContextMenu from './CellContextMenu'
@@ -10,7 +10,6 @@ import PlanningLegend from './PlanningLegend'
 import {
   Creneau,
   JourSemaine,
-  DisponibilitePeriode,
   DisponibiliteSpecifique,
   Affectation,
   AbsenceData,
@@ -19,19 +18,26 @@ import {
   JOUR_LABELS,
   JOURS_CALENDRIER,
   formatDate,
-  calculateCellStatusWithPeriodes,
+  calculateCellStatus,
   getJourSemaine,
 } from './types'
 
+export interface RemplacantSelectedCell {
+  date: string
+  creneau: Creneau
+  status: CellData['status']
+}
+
 interface MonthCalendarProps {
   remplacantId: number
-  periodes: DisponibilitePeriode[]
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
   absences?: AbsenceData[]
   vacances?: VacancesScolaires[]
   onRefresh: () => void
   readOnly?: boolean
+  portailMode?: boolean
+  onSelectionAction?: (action: 'absence' | 'remplacement' | 'disponibilite' | 'exception' | 'effacer', cells: RemplacantSelectedCell[]) => void
 }
 
 const MOIS_LABELS = [
@@ -41,18 +47,44 @@ const MOIS_LABELS = [
 
 export default function MonthCalendar({
   remplacantId,
-  periodes,
   specifiques,
   affectations,
   absences: absencesData = [],
   vacances = [],
   onRefresh,
   readOnly = false,
+  portailMode = false,
+  onSelectionAction,
 }: MonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const today = new Date()
     return new Date(today.getFullYear(), today.getMonth(), 1)
   })
+
+  // Multi-selection state
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
+
+  const toggleCellSelection = useCallback((date: string, creneau: Creneau) => {
+    const key = `${date}:${creneau}`
+    setSelectedCells(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedCells(new Set())
+  }, [])
+
+  // Clear selection when month changes or data changes
+  useEffect(() => {
+    clearSelection()
+  }, [currentMonth, specifiques, affectations, absencesData, clearSelection])
 
   const [contextMenu, setContextMenu] = useState<{
     data: CellData
@@ -142,10 +174,9 @@ export default function MonthCalendar({
   const getCellData = useCallback(
     (date: Date, creneau: Creneau): CellData => {
       const dateStr = formatDate(date)
-      const { status, affectation, specifique, absence } = calculateCellStatusWithPeriodes(
+      const { status, affectation, specifique, absence } = calculateCellStatus(
         dateStr,
         creneau,
-        periodes,
         specifiques,
         affectations,
         absencesData.length > 0 ? absencesData : undefined
@@ -163,12 +194,29 @@ export default function MonthCalendar({
         vacancesNom,
       }
     },
-    [periodes, specifiques, affectations, absencesData, isDateInVacances]
+    [specifiques, affectations, absencesData, isDateInVacances]
   )
+
+  // Build selected cells array for the action handler
+  const selectedCellsArray = useMemo((): RemplacantSelectedCell[] => {
+    return Array.from(selectedCells).map(key => {
+      const [date, creneau] = key.split(':') as [string, Creneau]
+      const dateObj = new Date(date + 'T00:00:00')
+      const cellData = getCellData(dateObj, creneau)
+      return { date, creneau, status: cellData.status }
+    })
+  }, [selectedCells, getCellData])
 
   const handleCellClick = (data: CellData, event: React.MouseEvent) => {
     if (readOnly) return
 
+    // In selection mode: toggle selection for non-affecte cells
+    if (onSelectionAction && data.status !== 'affecte') {
+      toggleCellSelection(data.date, data.creneau)
+      return
+    }
+
+    // Otherwise: open context menu
     setContextMenu({
       data,
       position: { x: event.clientX, y: event.clientY },
@@ -392,24 +440,27 @@ export default function MonthCalendar({
                   return creneaux.map((creneau, creneauIndex) => {
                     const cellData = getCellData(date, creneau)
 
-                    const todayLeftClass = isToday && creneauIndex === 0 ? 'border-l-2 border-l-purple-400' : ''
-                    const todayRightClass = isToday && creneauIndex === 1 ? 'border-r-2 border-r-purple-400' : ''
-                    const todayTopBottom = isToday ? 'border-t-2 border-t-purple-400 border-b-2 border-b-purple-400' : ''
+                    const todayBorder = isToday
+                      ? creneauIndex === 0
+                        ? 'border-l-2 border-t-2 border-b-2 border-l-purple-400 border-t-purple-400 border-b-purple-400 rounded-l'
+                        : 'border-r-2 border-t-2 border-b-2 border-r-purple-400 border-t-purple-400 border-b-purple-400 rounded-r'
+                      : ''
 
                     return (
                       <td
                         key={`${weekIndex}-${jour}-${creneau}`}
-                        className={`p-1 pb-2 ${creneauIndex === 0 ? 'pl-5' : ''} ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}
+                        className={`p-1 pb-2 ${creneauIndex === 0 ? 'pl-5' : ''}`}
                       >
-                        <div className="relative">
+                        <div className={`relative ${todayBorder}`}>
                           <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'}`}>
                             {date.getDate()}
                           </div>
                           <CalendarCell
                             data={cellData}
-                            onClick={readOnly ? undefined : (data) => handleCellClick(data, window.event as unknown as React.MouseEvent)}
+                            onClick={readOnly ? undefined : (data, e) => handleCellClick(data, e || window.event as unknown as React.MouseEvent)}
                             compact
                             isToday={isToday}
+                            isSelected={selectedCells.has(`${dateStr}:${creneau}`)}
                           />
                         </div>
                       </td>
@@ -421,6 +472,53 @@ export default function MonthCalendar({
           </tbody>
         </table>
       </div>
+
+      {/* Barre d'actions flottante */}
+      {selectedCells.size > 0 && onSelectionAction && (
+        <div className="sticky bottom-4 mt-4 bg-white border border-purple-200 rounded-xl shadow-lg px-4 py-3 flex items-center gap-3 flex-wrap z-20">
+          <span className="text-sm font-medium text-gray-700">
+            {selectedCells.size} créneau{selectedCells.size > 1 ? 'x' : ''} sélectionné{selectedCells.size > 1 ? 's' : ''}
+          </span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+            onClick={() => onSelectionAction('disponibilite', selectedCellsArray)}
+          >
+            Marquer disponible
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+            onClick={() => onSelectionAction('absence', selectedCellsArray)}
+          >
+            Déclarer une absence
+          </button>
+          {!portailMode && (
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+              onClick={() => onSelectionAction('remplacement', selectedCellsArray)}
+            >
+              Annoncer un remplacement
+            </button>
+          )}
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+            onClick={() => onSelectionAction('exception', selectedCellsArray)}
+          >
+            Effacer
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            onClick={clearSelection}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Légende */}
       <div className="mt-4">
@@ -436,9 +534,9 @@ export default function MonthCalendar({
           onAddException={handleAddException}
           onRemoveException={handleRemoveException}
           onAddPonctuel={handleAddPonctuel}
-          onCreateAffectation={handleCreateAffectation}
+          onCreateAffectation={portailMode ? undefined : handleCreateAffectation}
           onViewAffectation={contextMenu.data.affectation ? handleViewAffectation : undefined}
-          onDeleteAffectation={contextMenu.data.affectation ? handleDeleteAffectation : undefined}
+          onDeleteAffectation={!portailMode && contextMenu.data.affectation ? handleDeleteAffectation : undefined}
         />
       )}
 

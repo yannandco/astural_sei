@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, and, gte, lte, desc } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { remplacantAffectations, collaborateurs, ecoles } from '@/lib/db/schema'
+import { remplacantAffectations, collaborateurs, ecoles, directeurs } from '@/lib/db/schema'
 import { requireAuth, requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -42,8 +42,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         collaborateurId: remplacantAffectations.collaborateurId,
         collaborateurNom: collaborateurs.lastName,
         collaborateurPrenom: collaborateurs.firstName,
+        collaborateurEmail: collaborateurs.email,
+        collaborateurMobilePro: collaborateurs.mobilePro,
         ecoleId: remplacantAffectations.ecoleId,
         ecoleNom: ecoles.name,
+        directeurNom: directeurs.lastName,
+        directeurPrenom: directeurs.firstName,
+        directeurEmail: directeurs.email,
+        directeurPhone: directeurs.phone,
+        titulairesNoms: sql<string>`(
+          SELECT string_agg(UPPER(t.last_name) || ' ' || t.first_name, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true
+        )`.as('titulaires_noms'),
+        titulairesEmails: sql<string>`(
+          SELECT string_agg(t.email, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true AND t.email IS NOT NULL
+        )`.as('titulaires_emails'),
+        titulairesPhones: sql<string>`(
+          SELECT string_agg(t.phone, ', ' ORDER BY t.last_name)
+          FROM titulaire_affectations ta
+          JOIN titulaires t ON ta.titulaire_id = t.id
+          WHERE ta.ecole_id = ${ecoles.id} AND ta.is_active = true AND t.phone IS NOT NULL
+        )`.as('titulaires_phones'),
         dateDebut: remplacantAffectations.dateDebut,
         dateFin: remplacantAffectations.dateFin,
         creneau: remplacantAffectations.creneau,
@@ -54,6 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from(remplacantAffectations)
       .leftJoin(collaborateurs, eq(remplacantAffectations.collaborateurId, collaborateurs.id))
       .leftJoin(ecoles, eq(remplacantAffectations.ecoleId, ecoles.id))
+      .leftJoin(directeurs, eq(ecoles.directeurId, directeurs.id))
       .where(and(...conditions))
       .orderBy(desc(remplacantAffectations.dateDebut))
 

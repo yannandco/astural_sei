@@ -22,6 +22,7 @@ interface Ecole {
   etabDirecteurFirstName: string | null
   titulairesNoms: string | null
   collaborateursNoms: string | null
+  remplacementApresJours: number | null
   isActive: boolean
 }
 
@@ -177,6 +178,7 @@ export default function EcolesPage() {
                 ))}
                 <th className="ds-table-header-cell">Titulaires</th>
                 <th className="ds-table-header-cell">Collaborateurs</th>
+                <th className="ds-table-header-cell">Délai rempl.</th>
                 <th className="ds-table-header-cell cursor-pointer select-none hover:text-purple-700 transition-colors" onClick={() => toggleSort('isActive')}>
                   <span className="inline-flex items-center gap-1">
                     Statut
@@ -219,6 +221,15 @@ export default function EcolesPage() {
                         ))}
                       </div>
                     ) : '-'}
+                  </td>
+                  <td className="ds-table-cell text-center">
+                    {item.remplacementApresJours != null ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {item.remplacementApresJours}j
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">--</span>
+                    )}
                   </td>
                   <td className="ds-table-cell">
                     <span className={item.isActive ? 'status-badge-success' : 'status-badge-gray'}>{item.isActive ? 'Actif' : 'Inactif'}</span>

@@ -30,7 +30,13 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/collaborateurs')
+      // Redirect based on role
+      const role = data.user?.role
+      if (role === 'collaborateur' || role === 'remplacant') {
+        router.push('/portail')
+      } else {
+        router.push('/collaborateurs')
+      }
     } catch {
       setError('Erreur de connexion au serveur')
     } finally {

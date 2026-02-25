@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '@/components/ui'
 
 interface Intervenant { collaborateurId: number; firstName: string; lastName: string }
 interface Affectation { id: number; ecoleId: number; classeId: number | null; dateDebut: string | null; dateFin: string | null; isActive: boolean; ecoleName: string | null; classeName: string | null; intervenants: Intervenant[] }
@@ -152,7 +153,7 @@ export default function TitulaireDetailPage() {
                   <div className="form-group">
                     <label className="form-label">Téléphone</label>
                     {isEditMode ? (
-                      <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                      <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                     ) : (
                       <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                     )}

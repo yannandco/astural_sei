@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
         ville: ecoles.ville,
         phone: ecoles.phone,
         email: ecoles.email,
+        remplacementApresJours: ecoles.remplacementApresJours,
         isActive: ecoles.isActive,
         createdAt: ecoles.createdAt,
         updatedAt: ecoles.updatedAt,

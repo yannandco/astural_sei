@@ -1,0 +1,191 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
+import { hash } from '@node-rs/argon2'
+import { db } from '@/lib/db'
+import { users, remplacants } from '@/lib/db/schema'
+import { requireRole } from '@/lib/auth/server'
+
+type RouteParams = { params: Promise<{ id: string }> }
+
+// GET - Vérifier l'accès portail d'un remplaçant
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireRole(['admin'])
+
+    const { id } = await params
+    const remplacantId = parseInt(id)
+
+    if (isNaN(remplacantId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    const [remp] = await db
+      .select({ userId: remplacants.userId })
+      .from(remplacants)
+      .where(eq(remplacants.id, remplacantId))
+      .limit(1)
+
+    if (!remp) {
+      return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
+    }
+
+    if (!remp.userId) {
+      return NextResponse.json({ data: { hasAccess: false } })
+    }
+
+    const [user] = await db
+      .select({ email: users.email, isActive: users.isActive })
+      .from(users)
+      .where(eq(users.id, remp.userId))
+      .limit(1)
+
+    return NextResponse.json({
+      data: { hasAccess: true, email: user?.email, isActive: user?.isActive },
+    })
+  } catch (error) {
+    console.error('Error checking remplacant access:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// POST - Créer un accès portail pour un remplaçant
+export async function POST(request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireRole(['admin'])
+
+    const { id } = await params
+    const remplacantId = parseInt(id)
+
+    if (isNaN(remplacantId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    // Vérifier que le remplaçant existe
+    const [remp] = await db
+      .select()
+      .from(remplacants)
+      .where(eq(remplacants.id, remplacantId))
+      .limit(1)
+
+    if (!remp) {
+      return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
+    }
+
+    if (remp.userId) {
+      return NextResponse.json({ error: 'Ce remplaçant a déjà un accès portail' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const { email, password } = body
+
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email et mot de passe requis' }, { status: 400 })
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Le mot de passe doit faire au moins 6 caractères' }, { status: 400 })
+    }
+
+    // Vérifier que l'email n'est pas déjà utilisé
+    const [existingUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    if (existingUser) {
+      return NextResponse.json({ error: 'Cet email est déjà utilisé' }, { status: 400 })
+    }
+
+    // Créer le user
+    const hashedPassword = await hash(password)
+    const name = `${remp.firstName} ${remp.lastName}`
+
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        name,
+        email,
+        password: hashedPassword,
+        role: 'remplacant',
+        isActive: true,
+      })
+      .returning()
+
+    // Lier au remplaçant
+    await db
+      .update(remplacants)
+      .set({ userId: newUser.id, updatedAt: new Date() })
+      .where(eq(remplacants.id, remplacantId))
+
+    return NextResponse.json({
+      data: { userId: newUser.id, email: newUser.email },
+    }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating remplacant access:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}
+
+// DELETE - Retirer l'accès portail d'un remplaçant
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  try {
+    await requireRole(['admin'])
+
+    const { id } = await params
+    const remplacantId = parseInt(id)
+
+    if (isNaN(remplacantId)) {
+      return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
+    }
+
+    const [remp] = await db
+      .select()
+      .from(remplacants)
+      .where(eq(remplacants.id, remplacantId))
+      .limit(1)
+
+    if (!remp) {
+      return NextResponse.json({ error: 'Remplaçant non trouvé' }, { status: 404 })
+    }
+
+    if (!remp.userId) {
+      return NextResponse.json({ error: 'Ce remplaçant n\'a pas d\'accès portail' }, { status: 400 })
+    }
+
+    // Désactiver le user
+    await db
+      .update(users)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(users.id, remp.userId))
+
+    // Dissocier le user
+    await db
+      .update(remplacants)
+      .set({ userId: null, updatedAt: new Date() })
+      .where(eq(remplacants.id, remplacantId))
+
+    return NextResponse.json({ data: { success: true } })
+  } catch (error) {
+    console.error('Error removing remplacant access:', error)
+    if ((error as Error).message === 'Non authentifié') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
+    if ((error as Error).message === 'Accès non autorisé') {
+      return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
+  }
+}

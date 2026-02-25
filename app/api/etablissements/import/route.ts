@@ -47,7 +47,7 @@ interface ParsedRow {
   collaborateurJoursPresence: JourPresence[]
   titulaire1: { lastName: string; firstName: string; email?: string | null; phone?: string | null; joursPresence: JourPresence[]; isNew: boolean; id?: number } | null
   titulaire2: { lastName: string; firstName: string; email?: string | null; phone?: string | null; joursPresence: JourPresence[]; isNew: boolean; id?: number } | null
-  remplacementApresJours: number | null
+  remplacementApresJours: string | null
   tauxEngagement: string | null
   tauxCoIntervention: string | null
   commentaires: string | null
@@ -710,7 +710,7 @@ export async function POST(request: NextRequest) {
           collaborateurJoursPresence: collabJoursPresence,
           titulaire1: titulaire1Data,
           titulaire2: titulaire2Data,
-          remplacementApresJours: parseInt(remplacementJoursRaw),
+          remplacementApresJours: remplacementJoursRaw != null && remplacementJoursRaw !== '' && !isNaN(Number(remplacementJoursRaw)) ? Number(remplacementJoursRaw).toString() : null,
           tauxEngagement: parseDecimal(tauxEngagementRaw),
           tauxCoIntervention: parseDecimal(tauxCoInterventionRaw),
           commentaires: commentairesRaw || null,

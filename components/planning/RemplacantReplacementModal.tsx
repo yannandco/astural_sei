@@ -47,6 +47,7 @@ interface RemplacantReplacementModalProps {
     motifDetails?: string
   }) => Promise<void>
   prefillDate?: string
+  prefillDateFin?: string
   prefillCreneau?: Creneau
 }
 
@@ -56,6 +57,7 @@ export default function RemplacantReplacementModal({
   onClose,
   onSave,
   prefillDate,
+  prefillDateFin,
   prefillCreneau,
 }: RemplacantReplacementModalProps) {
   const [saving, setSaving] = useState(false)
@@ -175,14 +177,14 @@ export default function RemplacantReplacementModal({
     if (isOpen) {
       setCollaborateurId('')
       setDateDebut(prefillDate || '')
-      setDateFin(prefillDate || '')
+      setDateFin(prefillDateFin || prefillDate || '')
       setMotif('maladie')
       setMotifDetails('')
       setSearchCollab('')
       setPresences([])
       fetchCollaborateurs()
     }
-  }, [isOpen, prefillDate, fetchCollaborateurs])
+  }, [isOpen, prefillDate, prefillDateFin, fetchCollaborateurs])
 
   // Fetch presences when collaborateur changes
   useEffect(() => {

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserGroupIcon } from '@heroicons/react/24/outline'
-import { DatePicker } from '@/components/ui'
+import { DatePicker, PhoneInput } from '@/components/ui'
 
 const emptyForm = { lastName: '', firstName: '', address: '', phone: '', email: '', contractStartDate: '', contractEndDate: '' }
 
@@ -82,7 +82,7 @@ export default function CreateRemplacantPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                  <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>

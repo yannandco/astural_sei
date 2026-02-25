@@ -3,8 +3,6 @@ import { eq, and, gte, lte, asc } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import {
   remplacants,
-  remplacantDisponibilitesPeriodes,
-  remplacantDisponibilitesRecurrentes,
   remplacantDisponibilitesSpecifiques,
   remplacantAffectations,
   collaborateurs,
@@ -43,40 +41,7 @@ export async function GET(request: NextRequest) {
       .where(eq(remplacants.isActive, true))
       .orderBy(asc(remplacants.lastName), asc(remplacants.firstName))
 
-    // 2. Récupérer toutes les périodes actives qui chevauchent la plage demandée
-    const allPeriodes = await db
-      .select()
-      .from(remplacantDisponibilitesPeriodes)
-      .where(
-        and(
-          eq(remplacantDisponibilitesPeriodes.isActive, true),
-          lte(remplacantDisponibilitesPeriodes.dateDebut, endDate),
-          gte(remplacantDisponibilitesPeriodes.dateFin, startDate)
-        )
-      )
-
-    // 3. Récupérer toutes les récurrences des périodes
-    const periodeIds = allPeriodes.map((p) => p.id)
-    const allRecurrentes = periodeIds.length > 0
-      ? await db
-          .select()
-          .from(remplacantDisponibilitesRecurrentes)
-          .where(
-            eq(remplacantDisponibilitesRecurrentes.periodeId, periodeIds[0]) // Will be filtered below
-          )
-      : []
-
-    // Actually fetch all recurrences for all periodes
-    const allRecurrentesPromises = allPeriodes.map(async (periode) => {
-      const recurrences = await db
-        .select()
-        .from(remplacantDisponibilitesRecurrentes)
-        .where(eq(remplacantDisponibilitesRecurrentes.periodeId, periode.id))
-      return { periodeId: periode.id, recurrences }
-    })
-    const recurrencesResults = await Promise.all(allRecurrentesPromises)
-
-    // 4. Récupérer toutes les disponibilités spécifiques pour la période
+    // 2. Récupérer toutes les disponibilités spécifiques pour la période
     const allSpecifiques = await db
       .select()
       .from(remplacantDisponibilitesSpecifiques)
@@ -135,40 +100,6 @@ export async function GET(request: NextRequest) {
       )
 
     // Grouper par remplaçant
-    const recurrencesByPeriode = new Map<number, typeof allRecurrentes>()
-    for (const result of recurrencesResults) {
-      recurrencesByPeriode.set(result.periodeId, result.recurrences)
-    }
-
-    const periodesByRemplacant = new Map<number, Array<{
-      id: number
-      remplacantId: number
-      nom: string | null
-      dateDebut: string
-      dateFin: string
-      isActive: boolean
-      recurrences: Array<{
-        id: number
-        periodeId: number
-        jourSemaine: string
-        creneau: string
-      }>
-    }>>()
-
-    for (const periode of allPeriodes) {
-      const list = periodesByRemplacant.get(periode.remplacantId) || []
-      list.push({
-        id: periode.id,
-        remplacantId: periode.remplacantId,
-        nom: periode.nom,
-        dateDebut: periode.dateDebut,
-        dateFin: periode.dateFin,
-        isActive: periode.isActive,
-        recurrences: recurrencesByPeriode.get(periode.id) || [],
-      })
-      periodesByRemplacant.set(periode.remplacantId, list)
-    }
-
     const specifiquesByRemplacant = new Map<number, typeof allSpecifiques>()
     for (const spec of allSpecifiques) {
       const list = specifiquesByRemplacant.get(spec.remplacantId) || []
@@ -197,7 +128,6 @@ export async function GET(request: NextRequest) {
       lastName: r.lastName,
       firstName: r.firstName,
       isAvailable: r.isAvailable,
-      periodes: periodesByRemplacant.get(r.id) || [],
       specifiques: specifiquesByRemplacant.get(r.id) || [],
       affectations: affectationsByRemplacant.get(r.id) || [],
       absences: absencesByRemplacant.get(r.id) || [],

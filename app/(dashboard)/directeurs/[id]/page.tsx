@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '@/components/ui'
 
 interface EcoleInfo { id: number; name: string }
 interface Remplacement { id: number; ecoleId: number; directeurOriginalId: number; remplacantDirecteurId: number; dateDebut: string; dateFin: string | null; motif: string | null }
@@ -152,7 +153,7 @@ export default function DirecteurDetailPage() {
                   <div className="form-group">
                     <label className="form-label">Téléphone</label>
                     {isEditMode ? (
-                      <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                      <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                     ) : (
                       <div className="py-0.5 text-gray-900">{formData.phone || '-'}</div>
                     )}

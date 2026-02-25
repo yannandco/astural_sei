@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { eq, and, gte, lte, desc } from 'drizzle-orm'
+import { eq, and, or, gte, lte, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { absences, collaborateurs, remplacantAffectations, remplacants } from '@/lib/db/schema'
+import { absences, collaborateurs, remplacantAffectations, remplacants, collaborateurEcoles, ecoles } from '@/lib/db/schema'
 import { requireAuth, requireRole } from '@/lib/auth/server'
+import { computeEcoleUrgency, computeOverallUrgency, type EcoleUrgency } from '@/lib/urgency'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -50,9 +51,38 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .where(and(...conditions))
       .orderBy(desc(absences.dateDebut))
 
+    const today = new Date().toISOString().split('T')[0]
+
+    // Get collaborateur's écoles for urgency computation
+    const collabEcoles = await db
+      .select({
+        ecoleId: collaborateurEcoles.ecoleId,
+        remplacementApresJours: ecoles.remplacementApresJours,
+        ecoleName: ecoles.name,
+      })
+      .from(collaborateurEcoles)
+      .leftJoin(ecoles, eq(collaborateurEcoles.ecoleId, ecoles.id))
+      .where(eq(collaborateurEcoles.collaborateurId, collaborateurId))
+
     // Pour chaque absence, vérifier si elle est couverte par un remplacement
     const enrichedData = await Promise.all(
       data.map(async (absence) => {
+        // Créneau matching: le remplacement doit couvrir le même créneau que l'absence
+        const creneauCondition = absence.creneau === 'journee'
+          ? undefined // journée = tout créneau de remplacement couvre
+          : or(
+              eq(remplacantAffectations.creneau, absence.creneau),
+              eq(remplacantAffectations.creneau, 'journee')
+            )
+
+        const remplacementConditions = [
+          eq(remplacantAffectations.collaborateurId, collaborateurId),
+          eq(remplacantAffectations.isActive, true),
+          lte(remplacantAffectations.dateDebut, absence.dateFin),
+          gte(remplacantAffectations.dateFin, absence.dateDebut),
+        ]
+        if (creneauCondition) remplacementConditions.push(creneauCondition)
+
         const remplacement = await db
           .select({
             id: remplacantAffectations.id,
@@ -62,20 +92,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           })
           .from(remplacantAffectations)
           .leftJoin(remplacants, eq(remplacantAffectations.remplacantId, remplacants.id))
-          .where(
-            and(
-              eq(remplacantAffectations.collaborateurId, collaborateurId),
-              eq(remplacantAffectations.isActive, true),
-              lte(remplacantAffectations.dateDebut, absence.dateFin),
-              gte(remplacantAffectations.dateFin, absence.dateDebut)
-            )
-          )
+          .where(and(...remplacementConditions))
           .limit(1)
+
+        const isRemplacee = remplacement.length > 0
+
+        // Compute urgency per école
+        const ecoleUrgencies: EcoleUrgency[] = collabEcoles.map(e => {
+          const { urgency, joursRestants } = computeEcoleUrgency(
+            absence.dateDebut,
+            e.remplacementApresJours,
+            isRemplacee,
+            today,
+          )
+          return {
+            ecoleId: e.ecoleId,
+            ecoleName: e.ecoleName || '',
+            remplacementApresJours: e.remplacementApresJours,
+            isRemplacee,
+            urgency,
+            joursRestants,
+          }
+        })
+
+        const overall = computeOverallUrgency(ecoleUrgencies)
 
         return {
           ...absence,
-          isRemplacee: remplacement.length > 0,
+          isRemplacee,
           remplacement: remplacement[0] || null,
+          urgency: overall.urgency,
+          joursRestants: overall.joursRestants,
         }
       })
     )

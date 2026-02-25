@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeftIcon, UserPlusIcon } from '@heroicons/react/24/outline'
+import { PhoneInput } from '@/components/ui'
 
 const emptyForm = { lastName: '', firstName: '', email: '', phone: '' }
 
@@ -81,7 +82,7 @@ export default function CreateDirecteurPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Téléphone</label>
-                  <input type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="form-input" />
+                  <PhoneInput value={formData.phone} onChange={(value) => updateField('phone', value)} />
                 </div>
               </div>
             </div>

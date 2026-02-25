@@ -3,17 +3,24 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDaysIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon, XMarkIcon, UserPlusIcon, MagnifyingGlassCircleIcon, TrashIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
+import { CalendarDaysIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon, XMarkIcon, UserPlusIcon, MagnifyingGlassCircleIcon, TrashIcon, ChatBubbleLeftRightIcon, PlusIcon, ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { DateRangePicker } from '@/components/ui'
 
 interface JourPresence {
   jour: string
   creneau: string
 }
 
+type UrgencyLevel = 'urgent' | 'warning' | 'normal' | 'no_deadline' | 'replaced'
+
 interface AbsenceEcole {
   id: number
   name: string
   joursPresence: string | null
+  remplacementApresJours: number | null
+  isRemplacee: boolean
+  urgency: UrgencyLevel
+  joursRestants: number | null
 }
 
 interface WhatsappDisponible {
@@ -37,10 +44,14 @@ interface AbsenceRow {
   motifDetails: string | null
   isActive: boolean
   isRemplacee: boolean
+  replacementStatus: 'none' | 'partial' | 'full'
   remplacementRemplacantId: number | null
   remplacementRemplacantNom: string | null
   remplacementRemplacantPrenom: string | null
+  remplacants: { id: number; nom: string | null; prenom: string | null }[]
   collaborateurEcoles: AbsenceEcole[]
+  urgency: UrgencyLevel
+  joursRestants: number | null
   whatsappSent: number
   whatsappDisponible: WhatsappDisponible[]
   whatsappPasDisponible: number
@@ -97,9 +108,9 @@ export default function AbsencesPage() {
   const [showAll, setShowAll] = useState(false)
 
   // Sort
-  type SortKey = 'personLastName' | 'type' | 'dateDebut' | 'creneau' | 'motif'
-  const [sortKey, setSortKey] = useState<SortKey>('dateDebut')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  type SortKey = 'personLastName' | 'type' | 'dateDebut' | 'creneau' | 'motif' | 'urgency'
+  const [sortKey, setSortKey] = useState<SortKey>('urgency')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
@@ -128,6 +139,21 @@ export default function AbsencesPage() {
   const [responses, setResponses] = useState<WhatsappResponseRow[]>([])
   const [loadingResponses, setLoadingResponses] = useState(false)
 
+  // Create absence modal
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createStep, setCreateStep] = useState<1 | 2>(1)
+  const [createPersonType, setCreatePersonType] = useState<'collaborateur' | 'remplacant'>('collaborateur')
+  const [createPersonSearch, setCreatePersonSearch] = useState('')
+  const [createPersonResults, setCreatePersonResults] = useState<{ id: number; firstName: string; lastName: string }[]>([])
+  const [createPersonLoading, setCreatePersonLoading] = useState(false)
+  const [createSelectedPerson, setCreateSelectedPerson] = useState<{ id: number; firstName: string; lastName: string } | null>(null)
+  const [createDateDebut, setCreateDateDebut] = useState('')
+  const [createDateFin, setCreateDateFin] = useState('')
+  const [createCreneau, setCreateCreneau] = useState<'matin' | 'apres_midi' | 'journee'>('journee')
+  const [createMotif, setCreateMotif] = useState('maladie')
+  const [createMotifDetails, setCreateMotifDetails] = useState('')
+  const [createSaving, setCreateSaving] = useState(false)
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
@@ -137,8 +163,23 @@ export default function AbsencesPage() {
     }
   }
 
+  const URGENCY_PRIORITY: Record<UrgencyLevel, number> = {
+    urgent: 0,
+    warning: 1,
+    normal: 2,
+    no_deadline: 3,
+    replaced: 4,
+  }
+
   const sortedAbsences = useMemo(() => {
     const sorted = [...absences].sort((a, b) => {
+      if (sortKey === 'urgency') {
+        const aPri = URGENCY_PRIORITY[a.urgency] * 1000 + (a.joursRestants ?? 999)
+        const bPri = URGENCY_PRIORITY[b.urgency] * 1000 + (b.joursRestants ?? 999)
+        if (aPri !== bPri) return sortDir === 'asc' ? aPri - bPri : bPri - aPri
+        return b.dateDebut.localeCompare(a.dateDebut)
+      }
+
       let aVal = ''
       let bVal = ''
 
@@ -202,11 +243,7 @@ export default function AbsencesPage() {
   }
 
   const handleRowClick = (absence: AbsenceRow) => {
-    if (absence.type === 'collaborateur' && absence.collaborateurId) {
-      router.push(`/collaborateurs/${absence.collaborateurId}`)
-    } else if (absence.type === 'remplacant' && absence.remplacantId) {
-      router.push(`/remplacants/${absence.remplacantId}`)
-    }
+    router.push(`/absences/${absence.id}`)
   }
 
   // ─── Assignment modal handlers ──────────────────────────────
@@ -518,6 +555,120 @@ export default function AbsencesPage() {
     }
   }
 
+  const handleDeleteAbsence = async (absence: AbsenceRow) => {
+    if (!confirm('Supprimer cette absence ?')) return
+    try {
+      const endpoint = absence.type === 'collaborateur'
+        ? `/api/collaborateurs/${absence.collaborateurId}/absences?absenceId=${absence.id}`
+        : `/api/remplacants/${absence.remplacantId}/absences?absenceId=${absence.id}`
+      const res = await fetch(endpoint, { method: 'DELETE' })
+      if (res.ok) {
+        await fetchAbsences()
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Erreur lors de la suppression')
+      }
+    } catch (error) {
+      console.error('Error deleting absence:', error)
+    }
+  }
+
+  // ─── Create absence modal handlers ────────────────────────
+
+  const openCreateModal = () => {
+    setCreateStep(1)
+    setCreatePersonType('collaborateur')
+    setCreatePersonSearch('')
+    setCreatePersonResults([])
+    setCreateSelectedPerson(null)
+    setCreateDateDebut('')
+    setCreateDateFin('')
+    setCreateCreneau('journee')
+    setCreateMotif('maladie')
+    setCreateMotifDetails('')
+    setShowCreateModal(true)
+  }
+
+  // Debounced person search
+  useEffect(() => {
+    if (!showCreateModal || createStep !== 1) return
+    if (!createPersonSearch.trim()) {
+      setCreatePersonResults([])
+      return
+    }
+
+    setCreatePersonLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const endpoint = createPersonType === 'collaborateur'
+          ? `/api/collaborateurs?search=${encodeURIComponent(createPersonSearch)}&isActive=true`
+          : `/api/remplacants?search=${encodeURIComponent(createPersonSearch)}&isActive=true`
+        const res = await fetch(endpoint)
+        const data = await res.json()
+        setCreatePersonResults(
+          (data.data || []).map((p: { id: number; firstName: string; lastName: string }) => ({
+            id: p.id,
+            firstName: p.firstName,
+            lastName: p.lastName,
+          }))
+        )
+      } catch (error) {
+        console.error('Error searching persons:', error)
+      } finally {
+        setCreatePersonLoading(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [showCreateModal, createStep, createPersonSearch, createPersonType])
+
+  const handleSelectPerson = (person: { id: number; firstName: string; lastName: string }) => {
+    setCreateSelectedPerson(person)
+    setCreateStep(2)
+  }
+
+  const handleCreateAbsence = async () => {
+    if (!createSelectedPerson || !createDateDebut || !createDateFin) return
+
+    setCreateSaving(true)
+    try {
+      const endpoint = createPersonType === 'collaborateur'
+        ? `/api/collaborateurs/${createSelectedPerson.id}/absences`
+        : `/api/remplacants/${createSelectedPerson.id}/absences`
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dateDebut: createDateDebut,
+          dateFin: createDateFin,
+          creneau: createCreneau,
+          motif: createMotif,
+          motifDetails: createMotifDetails || undefined,
+        }),
+      })
+
+      if (!res.ok) {
+        const { error } = await res.json()
+        alert(error || 'Erreur lors de la création')
+        return
+      }
+
+      const data = await res.json()
+      setShowCreateModal(false)
+      await fetchAbsences()
+      // Redirect to the new absence detail page
+      if (data.data?.id) {
+        router.push(`/absences/${data.data.id}`)
+      }
+    } catch (error) {
+      console.error('Error creating absence:', error)
+      alert('Erreur lors de la création de l\'absence')
+    } finally {
+      setCreateSaving(false)
+    }
+  }
+
   const formatDateTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('fr-FR', {
       day: '2-digit',
@@ -542,6 +693,14 @@ export default function AbsencesPage() {
               <p className="ds-header-subtitle">{absences.length} absence{absences.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="btn btn-primary"
+          >
+            <PlusIcon className="w-5 h-5 -ml-1" />
+            Nouvelle absence
+          </button>
         </div>
       </div>
 
@@ -613,11 +772,9 @@ export default function AbsencesPage() {
           <table className="ds-table">
             <thead className="ds-table-header">
               <tr>
+                <th className="ds-table-header-cell">Statut</th>
                 {([
                   ['personLastName', 'Personne'],
-                  ['type', 'Type'],
-                  ['dateDebut', 'Dates'],
-                  ['creneau', 'Créneau'],
                   ['motif', 'Motif'],
                 ] as [SortKey, string][]).map(([key, label]) => (
                   <th
@@ -637,8 +794,29 @@ export default function AbsencesPage() {
                     </span>
                   </th>
                 ))}
-                <th className="ds-table-header-cell">Statut</th>
-                <th className="ds-table-header-cell">Actions</th>
+                <th className="ds-table-header-cell">Durée</th>
+                {([
+                  ['dateDebut', 'Dates'],
+                  ['urgency', 'Urgence'],
+                ] as [SortKey, string][]).map(([key, label]) => (
+                  <th
+                    key={key}
+                    className="ds-table-header-cell cursor-pointer select-none hover:text-purple-700 transition-colors"
+                    onClick={() => toggleSort(key)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {label}
+                      {sortKey === key ? (
+                        sortDir === 'asc'
+                          ? <ChevronUpIcon className="w-3.5 h-3.5" />
+                          : <ChevronDownIcon className="w-3.5 h-3.5" />
+                      ) : (
+                        <span className="w-3.5" />
+                      )}
+                    </span>
+                  </th>
+                ))}
+                <th className="ds-table-header-cell">Remplaçant(s)</th>
                 <th className="ds-table-header-cell">Réponses</th>
               </tr>
             </thead>
@@ -646,83 +824,110 @@ export default function AbsencesPage() {
               {sortedAbsences.map((absence) => (
                 <tr
                   key={absence.id}
-                  className="ds-table-row cursor-pointer hover:bg-purple-50 transition-colors"
+                  className={`ds-table-row cursor-pointer transition-colors ${
+                    absence.urgency === 'urgent' ? 'bg-red-50 hover:bg-red-100' :
+                    absence.urgency === 'warning' ? 'bg-yellow-50 hover:bg-yellow-100' :
+                    'hover:bg-purple-50'
+                  }`}
                   onClick={() => handleRowClick(absence)}
                 >
-                  <td className="ds-table-cell font-medium text-gray-900">
-                    {absence.personLastName?.toUpperCase()} {absence.personFirstName}
-                  </td>
+                  {/* Statut */}
                   <td className="ds-table-cell">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      absence.type === 'collaborateur'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-orange-100 text-orange-800'
-                    }`}>
-                      {TYPE_LABELS[absence.type]}
-                    </span>
+                    {absence.type === 'collaborateur' ? (
+                      absence.replacementStatus === 'full' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Remplacée</span>
+                      ) : absence.replacementStatus === 'partial' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Partielle</span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Non remplacée</span>
+                      )
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
+                    )}
                   </td>
-                  <td className="ds-table-cell text-gray-600">
-                    {formatDate(absence.dateDebut)}
-                    {absence.dateDebut !== absence.dateFin && ` → ${formatDate(absence.dateFin)}`}
+                  {/* Personne */}
+                  <td className="ds-table-cell">
+                    <div className="font-medium text-gray-900">{absence.personLastName?.toUpperCase()} {absence.personFirstName}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{TYPE_LABELS[absence.type]}</div>
                   </td>
-                  <td className="ds-table-cell text-gray-600">
-                    {CRENEAU_LABELS[absence.creneau]}
-                  </td>
+                  {/* Motif */}
                   <td className="ds-table-cell text-gray-600">
                     {MOTIF_LABELS[absence.motif]}
                     {absence.motifDetails && (
                       <span className="text-gray-400 ml-1">— {absence.motifDetails}</span>
                     )}
                   </td>
-                  {/* Statut */}
+                  {/* Durée */}
+                  <td className="ds-table-cell text-gray-600">
+                    {(() => {
+                      const start = new Date(absence.dateDebut + 'T00:00:00')
+                      const end = new Date(absence.dateFin + 'T00:00:00')
+                      let jours = 0
+                      const current = new Date(start)
+                      while (current <= end) {
+                        const dow = current.getDay()
+                        if (dow >= 1 && dow <= 5) jours++
+                        current.setDate(current.getDate() + 1)
+                      }
+                      const creneaux = absence.creneau === 'journee' ? jours * 2 : jours
+                      return (
+                        <div className="text-xs">
+                          <div className="font-medium">{jours}j</div>
+                          <div className="text-gray-400">{creneaux} crén.</div>
+                        </div>
+                      )
+                    })()}
+                  </td>
+                  {/* Dates */}
+                  <td className="ds-table-cell text-gray-600">
+                    {formatDate(absence.dateDebut)}
+                    {absence.dateDebut !== absence.dateFin && ` → ${formatDate(absence.dateFin)}`}
+                  </td>
+                  {/* Urgence */}
                   <td className="ds-table-cell">
                     {absence.type === 'collaborateur' ? (
-                      absence.isRemplacee ? (
+                      absence.urgency === 'replaced' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Aucune</span>
+                      ) : absence.urgency === 'urgent' ? (
                         <div>
-                          <span className="status-badge-success">Remplacé</span>
-                          {absence.remplacementRemplacantPrenom && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              par{' '}
-                              <Link
-                                href={`/remplacants/${absence.remplacementRemplacantId}`}
-                                className="text-purple-600 hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {absence.remplacementRemplacantPrenom} {absence.remplacementRemplacantNom}
-                              </Link>
-                            </div>
-                          )}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Urgent</span>
+                          <div className="text-[10px] text-red-600 mt-0.5">{Math.abs(absence.joursRestants!)}j de retard</div>
+                        </div>
+                      ) : absence.urgency === 'warning' ? (
+                        <div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Bientôt</span>
+                          <div className="text-[10px] text-amber-600 mt-0.5">{absence.joursRestants}j restant</div>
+                        </div>
+                      ) : absence.urgency === 'normal' ? (
+                        <div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Normal</span>
+                          <div className="text-[10px] text-blue-600 mt-0.5">{absence.joursRestants}j restant</div>
                         </div>
                       ) : (
-                        <span className="status-badge-gray">Non remplacé</span>
+                        <span className="text-gray-400 text-sm">--</span>
                       )
                     ) : (
-                      <span className="text-gray-400 text-sm">—</span>
+                      <span className="text-gray-400 text-sm">--</span>
                     )}
                   </td>
-                  {/* Actions */}
+                  {/* Remplaçant(s) */}
                   <td className="ds-table-cell">
-                    {absence.type === 'collaborateur' && !absence.isRemplacee && (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => openAssignModal(absence, e)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100 transition-colors"
-                          title="Affecter un remplaçant"
-                        >
-                          <UserPlusIcon className="w-3.5 h-3.5" />
-                          Affecter
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => openSearchModal(absence, e)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
-                          title="Rechercher un remplaçant disponible"
-                        >
-                          <MagnifyingGlassCircleIcon className="w-3.5 h-3.5" />
-                          Recherche
-                        </button>
+                    {absence.remplacants && absence.remplacants.length > 0 ? (
+                      <div className="text-xs space-y-0.5">
+                        {absence.remplacants.map((r) => (
+                          <div key={r.id}>
+                            <Link
+                              href={`/remplacants/${r.id}`}
+                              className="text-purple-600 hover:underline font-medium"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {r.prenom} {r.nom?.toUpperCase()}
+                            </Link>
+                          </div>
+                        ))}
                       </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">—</span>
                     )}
                   </td>
                   {/* Réponses */}
@@ -845,20 +1050,39 @@ export default function AbsencesPage() {
                   {assigningAbsence.collaborateurEcoles.length === 0 ? (
                     <p className="text-sm text-gray-500 italic">Aucune école associée à ce collaborateur</p>
                   ) : (
-                    <select
-                      value={selectedEcoleId}
-                      onChange={(e) => setSelectedEcoleId(e.target.value)}
-                      className="form-input"
-                    >
-                      {assigningAbsence.collaborateurEcoles.length > 1 && (
-                        <option value="">-- Sélectionner une école --</option>
-                      )}
-                      {assigningAbsence.collaborateurEcoles.map((ecole) => (
-                        <option key={ecole.id} value={ecole.id}>
-                          {ecole.name}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={selectedEcoleId}
+                        onChange={(e) => setSelectedEcoleId(e.target.value)}
+                        className="form-input"
+                      >
+                        {assigningAbsence.collaborateurEcoles.length > 1 && (
+                          <option value="">-- Sélectionner une école --</option>
+                        )}
+                        {assigningAbsence.collaborateurEcoles.map((ecole) => (
+                          <option key={ecole.id} value={ecole.id}>
+                            {ecole.name}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedEcoleId && (() => {
+                        const ecole = assigningAbsence.collaborateurEcoles.find(e => e.id.toString() === selectedEcoleId)
+                        if (!ecole || ecole.remplacementApresJours == null) return null
+                        return (
+                          <div className={`mt-2 text-xs px-2 py-1 rounded ${
+                            ecole.urgency === 'urgent' ? 'bg-red-50 text-red-700' :
+                            ecole.urgency === 'warning' ? 'bg-amber-50 text-amber-700' :
+                            ecole.urgency === 'normal' ? 'bg-blue-50 text-blue-700' :
+                            'bg-gray-50 text-gray-600'
+                          }`}>
+                            Délai de remplacement : {ecole.remplacementApresJours} jour{ecole.remplacementApresJours > 1 ? 's' : ''}
+                            {ecole.joursRestants !== null && (
+                              <> ({ecole.joursRestants < 0 ? `${Math.abs(ecole.joursRestants)}j de retard` : `${ecole.joursRestants}j restant`})</>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </>
                   )}
                 </div>
               </div>
@@ -1001,6 +1225,208 @@ export default function AbsencesPage() {
                 >
                   Fermer
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Création absence */}
+      {showCreateModal && (
+        <div className="modal-overlay">
+          <div className="modal-container max-w-lg overflow-visible">
+            <div className="modal-header">
+              <h3 className="text-lg font-semibold">
+                {createStep === 1 ? 'Nouvelle absence — Sélection personne' : 'Nouvelle absence — Détails'}
+              </h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="modal-body overflow-visible">
+              {createStep === 1 ? (
+                <div className="space-y-4">
+                  {/* Type toggle */}
+                  <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => { setCreatePersonType('collaborateur'); setCreatePersonSearch(''); setCreatePersonResults([]) }}
+                      className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        createPersonType === 'collaborateur'
+                          ? 'bg-white text-purple-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Collaborateur
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCreatePersonType('remplacant'); setCreatePersonSearch(''); setCreatePersonResults([]) }}
+                      className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        createPersonType === 'remplacant'
+                          ? 'bg-white text-purple-700 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Remplaçant
+                    </button>
+                  </div>
+
+                  {/* Search input */}
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder={`Rechercher un ${createPersonType === 'collaborateur' ? 'collaborateur' : 'remplaçant'}...`}
+                      value={createPersonSearch}
+                      onChange={(e) => setCreatePersonSearch(e.target.value)}
+                      className="form-input pl-9"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Results */}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto">
+                      {createPersonLoading ? (
+                        <div className="flex items-center justify-center p-6">
+                          <span className="inline-block w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">Recherche...</span>
+                        </div>
+                      ) : !createPersonSearch.trim() ? (
+                        <p className="text-sm text-gray-500 p-6 text-center">
+                          Tapez un nom pour rechercher
+                        </p>
+                      ) : createPersonResults.length === 0 ? (
+                        <p className="text-sm text-gray-500 p-6 text-center">
+                          Aucun résultat
+                        </p>
+                      ) : (
+                        createPersonResults.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectPerson(p)}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-purple-50 transition-colors border-b border-gray-100 last:border-b-0"
+                          >
+                            <span className="font-medium text-gray-900">{p.lastName.toUpperCase()}</span>{' '}
+                            <span className="text-gray-600">{p.firstName}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Selected person */}
+                  <div className="flex items-center justify-between bg-purple-50 rounded-lg px-3 py-2">
+                    <div>
+                      <span className="text-sm font-medium text-purple-800">
+                        {createSelectedPerson?.lastName.toUpperCase()} {createSelectedPerson?.firstName}
+                      </span>
+                      <span className="text-xs text-purple-500 ml-2">
+                        ({createPersonType === 'collaborateur' ? 'Collaborateur' : 'Remplaçant'})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setCreateStep(1); setCreatePersonSearch(''); setCreatePersonResults([]) }}
+                      className="text-purple-400 hover:text-purple-600"
+                      title="Changer de personne"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Date range */}
+                  <div className="form-group">
+                    <label className="form-label">Période *</label>
+                    <DateRangePicker
+                      valueStart={createDateDebut}
+                      valueEnd={createDateFin}
+                      onChangeStart={setCreateDateDebut}
+                      onChangeEnd={setCreateDateFin}
+                      required
+                    />
+                  </div>
+
+                  {/* Créneau */}
+                  <div className="form-group">
+                    <label className="form-label">Créneau *</label>
+                    <select
+                      value={createCreneau}
+                      onChange={(e) => setCreateCreneau(e.target.value as 'matin' | 'apres_midi' | 'journee')}
+                      className="form-select"
+                      required
+                    >
+                      <option value="journee">Journée</option>
+                      <option value="matin">Matin</option>
+                      <option value="apres_midi">Après-midi</option>
+                    </select>
+                  </div>
+
+                  {/* Motif */}
+                  <div className="form-group">
+                    <label className="form-label">Motif *</label>
+                    <select
+                      value={createMotif}
+                      onChange={(e) => setCreateMotif(e.target.value)}
+                      className="form-select"
+                      required
+                    >
+                      <option value="maladie">Maladie</option>
+                      <option value="conge">Congé</option>
+                      <option value="formation">Formation</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                  </div>
+
+                  {/* Détails */}
+                  <div className="form-group">
+                    <label className="form-label">Détails (optionnel)</label>
+                    <textarea
+                      value={createMotifDetails}
+                      onChange={(e) => setCreateMotifDetails(e.target.value)}
+                      className="form-textarea"
+                      rows={2}
+                      placeholder="Précisions sur l'absence..."
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <div>
+                {createStep === 2 && (
+                  <button
+                    type="button"
+                    onClick={() => { setCreateStep(1); setCreatePersonSearch(''); setCreatePersonResults([]) }}
+                    className="btn btn-secondary inline-flex items-center gap-1"
+                  >
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    Retour
+                  </button>
+                )}
+              </div>
+              <div className="modal-footer-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Annuler
+                </button>
+                {createStep === 2 && (
+                  <button
+                    type="button"
+                    onClick={handleCreateAbsence}
+                    disabled={createSaving || !createDateDebut || !createDateFin}
+                    className="btn btn-primary"
+                  >
+                    {createSaving ? 'Création...' : 'Créer l\'absence'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

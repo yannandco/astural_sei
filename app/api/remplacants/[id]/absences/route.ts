@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, gte, lte, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { absences, remplacants, remplacantAffectations, collaborateurs, ecoles } from '@/lib/db/schema'
-import { requireAuth, requireRole } from '@/lib/auth/server'
+import { requireAuth, requireAdminOrSelfRemplacant } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -97,14 +97,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // POST - Créer une absence remplaçant
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireRole(['admin'])
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    const { user } = await requireAdminOrSelfRemplacant(remplacantId)
 
     const body = await request.json()
     const { dateDebut, dateFin, creneau, motif, motifDetails } = body
@@ -174,14 +174,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 // PATCH - Modifier une absence
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireRole(['admin'])
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    const { user } = await requireAdminOrSelfRemplacant(remplacantId)
 
     const body = await request.json()
     const { absenceId, dateDebut, dateFin, creneau, motif, motifDetails } = body
@@ -239,14 +239,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // DELETE - Supprimer une absence
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireRole(['admin'])
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    await requireAdminOrSelfRemplacant(remplacantId)
 
     const { searchParams } = new URL(request.url)
     const absenceId = searchParams.get('absenceId')

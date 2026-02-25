@@ -1,5 +1,8 @@
 import { cookies } from 'next/headers'
 import { cache } from 'react'
+import { eq } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { collaborateurs, remplacants } from '@/lib/db/schema'
 import { lucia } from './lucia'
 import type { Session, User } from 'lucia'
 
@@ -45,4 +48,58 @@ export async function requireRole(allowedRoles: string[]) {
     throw new Error('Accès non autorisé')
   }
   return { user, session }
+}
+
+export async function requirePortailAuth() {
+  const { user, session } = await requireAuth()
+  if (user.role !== 'collaborateur' && user.role !== 'remplacant') {
+    throw new Error('Accès non autorisé')
+  }
+  return { user, session }
+}
+
+export async function requireAdminOrSelfRemplacant(remplacantId: number) {
+  const { user, session } = await requireAuth()
+
+  // Admin or regular user can manage any remplaçant
+  if (user.role === 'admin' || user.role === 'user') {
+    return { user, session }
+  }
+
+  // Self-service: remplaçant managing their own data
+  if (user.role === 'remplacant') {
+    const [remp] = await db
+      .select({ id: remplacants.id })
+      .from(remplacants)
+      .where(eq(remplacants.userId, user.id))
+      .limit(1)
+
+    if (remp && remp.id === remplacantId) {
+      return { user, session }
+    }
+  }
+
+  throw new Error('Accès non autorisé')
+}
+
+export async function getPortailUser() {
+  const { user, session } = await requirePortailAuth()
+
+  if (user.role === 'collaborateur') {
+    const [collab] = await db
+      .select()
+      .from(collaborateurs)
+      .where(eq(collaborateurs.userId, user.id))
+      .limit(1)
+    if (!collab) throw new Error('Collaborateur non trouvé')
+    return { user, session, role: 'collaborateur' as const, collaborateur: collab, remplacant: null }
+  }
+
+  const [remp] = await db
+    .select()
+    .from(remplacants)
+    .where(eq(remplacants.userId, user.id))
+    .limit(1)
+  if (!remp) throw new Error('Remplaçant non trouvé')
+  return { user, session, role: 'remplacant' as const, collaborateur: null, remplacant: remp }
 }

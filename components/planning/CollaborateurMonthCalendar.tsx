@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { ChevronLeftIcon, ChevronRightIcon, ArrowUturnLeftIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import {
   Creneau,
   JourSemaine,
   AbsenceData,
+  VacancesScolaires,
   JOUR_LABELS,
   JOURS_CALENDRIER,
   CRENEAU_LABELS,
@@ -45,12 +46,22 @@ export interface CellClickInfo {
   type: 'presence' | 'absence'
 }
 
+export interface SelectedCell {
+  date: string
+  creneau: Creneau
+  type: 'presence' | 'absence' | 'remplacement'
+}
+
 interface CollaborateurMonthCalendarProps {
   presences: Presence[]
   remplacements: Remplacement[]
   absences?: AbsenceData[]
+  vacances?: VacancesScolaires[]
+  initialDate?: Date
+  highlightCells?: Set<string>
   onRemplacementClick?: (remplacement: Remplacement) => void
   onCellClick?: (info: CellClickInfo) => void
+  onSelectionAction?: (action: 'absence' | 'remplacement' | 'supprimer_absence' | 'supprimer_remplacement', cells: SelectedCell[]) => void
 }
 
 const MOIS_LABELS = [
@@ -71,13 +82,62 @@ export default function CollaborateurMonthCalendar({
   presences,
   remplacements,
   absences: absencesData = [],
+  vacances = [],
+  initialDate,
+  highlightCells,
   onRemplacementClick,
   onCellClick,
+  onSelectionAction,
 }: CollaborateurMonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const today = new Date()
-    return new Date(today.getFullYear(), today.getMonth(), 1)
+    const ref = initialDate || new Date()
+    return new Date(ref.getFullYear(), ref.getMonth(), 1)
   })
+
+  // Multi-selection state
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
+
+  const toggleCellSelection = useCallback((date: string, creneau: Creneau, type: 'presence' | 'absence' | 'remplacement') => {
+    const key = `${date}:${creneau}`
+    setSelectedCells(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedCells(new Set())
+  }, [])
+
+  // Clear selection when month changes or data changes
+  useEffect(() => {
+    clearSelection()
+  }, [currentMonth, absencesData, remplacements, clearSelection])
+
+  // Build the array of selected cells for the action handler
+  const selectedCellsArray = useMemo((): SelectedCell[] => {
+    return Array.from(selectedCells).map(key => {
+      const [date, creneau] = key.split(':') as [string, Creneau]
+      // Determine type based on absence/remplacement data
+      const hasRemplacement = remplacements.some(r => {
+        const isInRange = date >= r.dateDebut && date <= r.dateFin
+        const creneauMatch = r.creneau === creneau || r.creneau === 'journee' || creneau === 'journee'
+        return isInRange && creneauMatch
+      })
+      if (hasRemplacement) return { date, creneau, type: 'remplacement' as const }
+      const hasAbsence = absencesData.some(a => {
+        const isInRange = date >= a.dateDebut && date <= a.dateFin
+        const creneauMatch = a.creneau === creneau || a.creneau === 'journee' || creneau === 'journee'
+        return isInRange && creneauMatch
+      })
+      return { date, creneau, type: hasAbsence ? 'absence' : 'presence' }
+    })
+  }, [selectedCells, absencesData, remplacements])
 
   // Obtenir tous les jours ouvrés du mois (Lu-Ve)
   const monthWorkDays = useMemo(() => {
@@ -137,6 +197,15 @@ export default function CollaborateurMonthCalendar({
 
     return map
   }, [presences])
+
+  // Vérifier si une date est en vacances
+  const isDateInVacances = useCallback(
+    (date: string): { isVacances: boolean; nom?: string } => {
+      const vacance = vacances.find((v) => date >= v.dateDebut && date <= v.dateFin)
+      return vacance ? { isVacances: true, nom: vacance.nom } : { isVacances: false }
+    },
+    [vacances]
+  )
 
   const creneaux: Creneau[] = ['matin', 'apres_midi']
 
@@ -234,7 +303,7 @@ export default function CollaborateurMonthCalendar({
               {JOURS_CALENDRIER.map((jour) => (
                 <th
                   key={jour}
-                  className="p-1 pl-5 text-center text-xs font-medium text-gray-500 uppercase w-[20%]"
+                  className="p-1 text-center text-xs font-medium text-gray-500 uppercase w-[20%]"
                   colSpan={2}
                 >
                   {JOUR_LABELS[jour]}
@@ -243,7 +312,7 @@ export default function CollaborateurMonthCalendar({
             </tr>
             <tr className="border-b border-gray-200">
               {JOURS_CALENDRIER.map((jour) => (
-                <th key={jour} colSpan={2} className="py-1 px-1 pl-5">
+                <th key={jour} colSpan={2} className="py-1 px-1">
                   <div className="flex">
                     <div className="flex-1 text-center text-[10px] text-gray-400">Mat</div>
                     <div className="flex-1 text-center text-[10px] text-gray-400">AM</div>
@@ -260,7 +329,7 @@ export default function CollaborateurMonthCalendar({
 
                   if (!date) {
                     return creneaux.map((creneau, ci) => (
-                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${ci === 0 ? 'pl-5' : ''}`}>
+                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${ci === 0 ? 'pr-0.5' : 'pl-0.5'}`}>
                         <div className="h-[60px] bg-gray-50 rounded border border-gray-200"></div>
                       </td>
                     ))
@@ -275,6 +344,7 @@ export default function CollaborateurMonthCalendar({
                     const remplacement = cellRemplacements[0]
                     const presencesList = getPresenceForCell(jour, creneau)
                     const hasPresence = presencesList.length > 0
+                    const { isVacances, nom: vacancesNom } = isDateInVacances(dateStr)
 
                     let bgColor = 'bg-gray-50 border-gray-200'
                     let textColor = 'text-gray-400'
@@ -286,44 +356,54 @@ export default function CollaborateurMonthCalendar({
 
                     if (showAbsence) {
                       if (absence!.isRemplacee && cellRemplacements.length > 0) {
-                        bgColor = 'bg-orange-100 border-orange-300'
-                        textColor = 'text-orange-700'
-                        isClickable = !!onRemplacementClick
+                        bgColor = 'bg-purple-100 border-purple-300'
+                        textColor = 'text-purple-700'
+                        isClickable = !!(onSelectionAction || onRemplacementClick)
                       } else {
                         bgColor = 'bg-red-200 border-red-400'
                         textColor = 'text-red-800'
-                        isClickable = !!onCellClick
+                        isClickable = !!(onSelectionAction || onCellClick)
                       }
                     } else if (showRemplacement) {
                       bgColor = 'bg-purple-100 border-purple-300'
                       textColor = 'text-purple-700'
-                      isClickable = !!onRemplacementClick
+                      isClickable = !!(onSelectionAction || onRemplacementClick)
+                    } else if (isVacances) {
+                      bgColor = 'bg-amber-50 border-amber-200'
+                      textColor = 'text-amber-600'
                     } else if (hasPresence) {
                       bgColor = 'bg-green-50 border-green-200'
                       textColor = 'text-green-700'
-                      isClickable = !!onCellClick
+                      isClickable = !!(onSelectionAction || onCellClick)
                     }
 
-                    const clickableClass = isClickable ? 'cursor-pointer hover:ring-2 ring-purple-400' : ''
+                    const cellKey = `${dateStr}:${creneau}`
+                    const isSelected = selectedCells.has(cellKey)
+                    const isHighlighted = highlightCells?.has(cellKey)
+                    const selectionClass = isSelected ? 'ring-2 ring-purple-500 ring-offset-1' : ''
+                    const highlightClass = isHighlighted && !isSelected ? 'ring-2 ring-blue-400 ring-offset-1' : ''
+                    const clickableClass = isClickable ? `cursor-pointer ${!isSelected && !isHighlighted ? 'hover:ring-2 hover:ring-purple-400' : ''}` : ''
 
-                    const todayLeftClass = isToday && creneauIndex === 0 ? 'border-l-2 border-l-purple-400' : ''
-                    const todayRightClass = isToday && creneauIndex === 1 ? 'border-r-2 border-r-purple-400' : ''
-                    const todayTopBottom = isToday ? 'border-t-2 border-t-purple-400 border-b-2 border-b-purple-400' : ''
+                    const todayBorder = isToday
+                      ? creneauIndex === 0
+                        ? 'border-l-2 border-t-2 border-b-2 border-l-purple-400 border-t-purple-400 border-b-purple-400 rounded-l'
+                        : 'border-r-2 border-t-2 border-b-2 border-r-purple-400 border-t-purple-400 border-b-purple-400 rounded-r'
+                      : ''
 
                     const remplacementsTitlePart = cellRemplacements.map(r =>
                       `${r.remplacantPrenom} ${r.remplacantNom}${r.ecoleNom ? ` (${r.ecoleNom})` : ''}`
                     ).join(', ')
 
                     return (
-                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${creneauIndex === 0 ? 'pl-5' : ''} ${todayLeftClass} ${todayRightClass} ${todayTopBottom}`}>
-                        <div className="relative">
+                      <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${creneauIndex === 0 ? 'pr-0.5' : 'pl-0.5'}`}>
+                        <div className={`relative ${todayBorder}`}>
                           <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'}`}>
                             {date.getDate()}
                           </div>
                           <div
                             className={`
                               h-[64px] rounded border flex flex-col justify-end items-start pt-5 pb-1 px-1
-                              ${bgColor} ${textColor} ${clickableClass}
+                              ${bgColor} ${textColor} ${clickableClass} ${selectionClass} ${highlightClass}
                             `}
                             title={
                               showAbsence
@@ -332,14 +412,21 @@ export default function CollaborateurMonthCalendar({
                                     : `Absent - ${MOTIF_LABELS[absence!.motif] || absence!.motif}`)
                                 : showRemplacement
                                   ? `Remplacé par ${remplacementsTitlePart}`
-                                  : hasPresence
-                                    ? presencesList.map(p => p.ecoleName).join(', ')
-                                    : 'Non présent'
+                                  : isVacances
+                                    ? vacancesNom || 'Vacances'
+                                    : hasPresence
+                                      ? presencesList.map(p => p.ecoleName).join(', ')
+                                      : 'Non présent'
                             }
                             onClick={isClickable ? (e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              if ((showAbsence && absence!.isRemplacee && remplacement) || showRemplacement) {
+                              if (onSelectionAction) {
+                                const cellType = (showAbsence && absence!.isRemplacee && cellRemplacements.length > 0) || showRemplacement
+                                  ? 'remplacement'
+                                  : showAbsence ? 'absence' : 'presence'
+                                toggleCellSelection(dateStr, creneau, cellType)
+                              } else if ((showAbsence && absence!.isRemplacee && remplacement) || showRemplacement) {
                                 onRemplacementClick?.(remplacement!)
                               } else if (onCellClick) {
                                 onCellClick({
@@ -386,6 +473,10 @@ export default function CollaborateurMonthCalendar({
                                   <div className="truncate opacity-75 text-[9px]">{cellRemplacements[0].ecoleNom}</div>
                                 )}
                               </div>
+                            ) : isVacances ? (
+                              <div className="text-[10px] leading-tight w-full">
+                                <div className="truncate font-medium">{vacancesNom || 'Vacances'}</div>
+                              </div>
                             ) : hasPresence ? (
                               <div className="text-[10px] leading-tight">
                                 {presencesList.slice(0, 2).map((p) => (
@@ -410,8 +501,67 @@ export default function CollaborateurMonthCalendar({
         </table>
       </div>
 
+      {/* Barre d'actions flottante */}
+      {selectedCells.size > 0 && onSelectionAction && (() => {
+        const hasAbsenceCells = selectedCellsArray.some(c => c.type === 'absence')
+        const hasRemplacementCells = selectedCellsArray.some(c => c.type === 'remplacement')
+        return (
+          <div className="sticky bottom-4 mt-4 bg-white border border-purple-200 rounded-xl shadow-lg px-4 py-3 flex items-center gap-3 flex-wrap z-20">
+            <span className="text-sm font-medium text-gray-700">
+              {selectedCells.size} créneau{selectedCells.size > 1 ? 'x' : ''} sélectionné{selectedCells.size > 1 ? 's' : ''}
+            </span>
+            <div className="flex-1" />
+            {hasAbsenceCells && (
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+                onClick={() => onSelectionAction('supprimer_absence', selectedCellsArray)}
+              >
+                Supprimer les absences
+              </button>
+            )}
+            {hasRemplacementCells && (
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
+                onClick={() => onSelectionAction('supprimer_remplacement', selectedCellsArray)}
+              >
+                Supprimer les remplacements
+              </button>
+            )}
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+              onClick={() => onSelectionAction('absence', selectedCellsArray)}
+            >
+              Déclarer une absence
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+              onClick={() => onSelectionAction('remplacement', selectedCellsArray)}
+            >
+              Annoncer un remplacement
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              onClick={clearSelection}
+            >
+              Annuler
+            </button>
+          </div>
+        )
+      })()}
+
       {/* Légende */}
       <div className="flex flex-wrap gap-4 mt-4 text-xs">
+        {highlightCells && highlightCells.size > 0 && (
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-white ring-2 ring-blue-400 rounded"></div>
+            <span className="text-gray-600">Période de l&apos;absence</span>
+          </div>
+        )}
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-green-50 border border-green-200 rounded"></div>
           <span className="text-gray-600">Présence</span>
@@ -425,8 +575,8 @@ export default function CollaborateurMonthCalendar({
           <span className="text-gray-600">Absent</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 bg-orange-100 border border-orange-300 rounded"></div>
-          <span className="text-gray-600">Absent (remplacé)</span>
+          <div className="w-3 h-3 bg-amber-50 border border-amber-200 rounded"></div>
+          <span className="text-gray-600">Vacances</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-gray-50 border border-gray-200 rounded"></div>

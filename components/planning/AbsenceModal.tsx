@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { DatePicker } from '@/components/ui'
+import { DateRangePicker } from '@/components/ui'
 import { Creneau, CRENEAU_LABELS, MOTIF_LABELS } from './types'
 
 interface AbsenceModalProps {
@@ -24,6 +24,7 @@ interface AbsenceModalProps {
     motifDetails: string | null
   }
   prefillDate?: string
+  prefillDateFin?: string
   prefillCreneau?: Creneau
 }
 
@@ -33,6 +34,7 @@ export default function AbsenceModal({
   onSave,
   editingAbsence,
   prefillDate,
+  prefillDateFin,
   prefillCreneau,
 }: AbsenceModalProps) {
   const [saving, setSaving] = useState(false)
@@ -52,7 +54,7 @@ export default function AbsenceModal({
         setMotifDetails(editingAbsence.motifDetails || '')
       } else {
         setDateDebut(prefillDate || '')
-        setDateFin(prefillDate || '')
+        setDateFin(prefillDateFin || prefillDate || '')
         setCreneau(prefillCreneau || 'journee')
         setMotif('maladie')
         setMotifDetails('')
@@ -97,34 +99,19 @@ export default function AbsenceModal({
         <form onSubmit={handleSubmit}>
           <div className="modal-body space-y-4 overflow-visible">
             {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label className="form-label">Date début *</label>
-                <DatePicker
-                  value={dateDebut}
-                  onChange={setDateDebut}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Date fin *</label>
-                <DatePicker
-                  value={dateFin}
-                  onChange={setDateFin}
-                  required
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Période *</label>
+              <DateRangePicker
+                valueStart={dateDebut}
+                valueEnd={dateFin}
+                onChangeStart={setDateDebut}
+                onChangeEnd={setDateFin}
+                required
+              />
             </div>
 
-            {/* Créneau */}
-            {prefillCreneau ? (
-              <div className="form-group">
-                <label className="form-label">Créneau</label>
-                <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                  {CRENEAU_LABELS[prefillCreneau]}
-                </div>
-              </div>
-            ) : (
+            {/* Créneau — masqué si pré-rempli depuis la sélection */}
+            {!prefillCreneau && (
               <div className="form-group">
                 <label className="form-label">Créneau *</label>
                 <select

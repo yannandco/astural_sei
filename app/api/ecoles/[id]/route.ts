@@ -27,6 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         ville: ecoles.ville,
         phone: ecoles.phone,
         email: ecoles.email,
+        remplacementApresJours: ecoles.remplacementApresJours,
         isActive: ecoles.isActive,
         createdAt: ecoles.createdAt,
         updatedAt: ecoles.updatedAt,
@@ -110,6 +111,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.etablissementId !== undefined) updateData.etablissementId = body.etablissementId
     if (body.directeurId !== undefined) updateData.directeurId = body.directeurId || null
     if (body.isActive !== undefined) updateData.isActive = body.isActive
+    if (body.remplacementApresJours !== undefined) updateData.remplacementApresJours = body.remplacementApresJours === '' || body.remplacementApresJours === null ? null : String(body.remplacementApresJours)
 
     const [updated] = await db
       .update(ecoles)

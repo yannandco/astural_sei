@@ -71,7 +71,7 @@ export const ecoles = pgTable('ecoles', {
   ville: varchar('ville', { length: 100 }),
   phone: varchar('phone', { length: 30 }),
   email: varchar('email', { length: 255 }),
-  remplacementApresJours: integer('remplacement_apres_jours'),
+  remplacementApresJours: decimal('remplacement_apres_jours', { precision: 4, scale: 1 }),
   commentaires: text('commentaires'),
   isActive: boolean('is_active').notNull().default(true),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
