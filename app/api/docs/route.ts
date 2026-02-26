@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import path from 'path'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 interface DocFile {
   name: string
@@ -43,7 +43,7 @@ async function scanDir(dirPath: string, basePath: string): Promise<DocFile[]> {
 
 export async function GET() {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
     const projectRoot = process.cwd()
     const files: DocFile[] = []
 

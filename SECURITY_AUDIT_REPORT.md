@@ -11,10 +11,12 @@
 
 **6 critiques, 16 moyens, 10 faibles** issues identifiees.
 
-**6 critiques corrigees, 1 moyen corrige.**
+**6 critiques corrigees, 3 moyens corriges.**
 
 Les corrections implementees couvrent :
 - C-01 a C-06 : toutes les issues critiques
+- M-01 : IDOR portail → dashboard (role checks)
+- M-02 : routes d'ecriture avec mauvais role check
 - M-03 : headers de securite
 - M-12 : messages d'erreur backup generiques (corrige dans le cadre de C-05)
 - M-16 : mot de passe DB via env (corrige dans le cadre de C-05)
@@ -86,23 +88,23 @@ Les corrections implementees couvrent :
 
 ## Issues Moyennes
 
-### M-01 : IDOR — Utilisateurs portail peuvent lire les donnees de tous les employes
+### M-01 : IDOR — Utilisateurs portail peuvent lire les donnees de tous les employes — CORRIGE
 
-**Fichiers** : 13+ routes GET utilisent `requireAuth()` au lieu de `requireRole(['admin', 'user'])`
+**Fichiers** : 38 routes GET dashboard + 2 routes self-service remplacant
 **Routes concernees** : `/api/remplacants/[id]/*`, `/api/collaborateurs/[id]/*`, `/api/absences/*`, `/api/planning/*`, `/api/whatsapp/responses`
-**Impact** : Un collaborateur/remplacant connecte au portail peut acceder aux absences, remarques, planning, et disponibilites de TOUS les employes.
-**Correction** : Changer `requireAuth()` en `requireRole(['admin', 'user'])` pour les routes dashboard. Utiliser `requireAdminOrSelfRemplacant()` pour les routes self-service.
+**Impact** : Un collaborateur/remplacant connecte au portail pouvait acceder aux absences, remarques, planning, et disponibilites de TOUS les employes.
+**Correction** : `requireAuth()` remplace par `requireRole(['admin', 'user'])` sur 38 routes GET dashboard. Routes self-service remplacant (`absences`, `disponibilites/specifiques`) utilisent `requireAdminOrSelfRemplacant(remplacantId)`.
 
 ---
 
-### M-02 : Routes d'ecriture avec mauvais role check
+### M-02 : Routes d'ecriture avec mauvais role check — CORRIGE
 
-| Route | Probleme |
-|-------|----------|
-| `POST /api/remplacants/[id]/remarques` | `requireAuth()` → devrait etre `requireRole(['admin', 'user'])` |
-| `POST /api/collaborateurs/[id]/remarques` | idem |
-| `DELETE /api/whatsapp/responses/[id]` | idem |
-| `POST /api/whatsapp` | Un portail user peut envoyer des WhatsApp via Twilio |
+| Route | Probleme | Correction |
+|-------|----------|------------|
+| `POST /api/remplacants/[id]/remarques` | `requireAuth()` | → `requireRole(['admin', 'user'])` |
+| `POST /api/collaborateurs/[id]/remarques` | `requireAuth()` | → `requireRole(['admin', 'user'])` |
+| `DELETE /api/whatsapp/responses/[id]` | `requireAuth()` | → `requireRole(['admin', 'user'])` |
+| `POST /api/whatsapp` | `requireAuth()` | → `requireRole(['admin', 'user'])` |
 
 ---
 
@@ -260,11 +262,11 @@ Les corrections implementees couvrent :
 2. ~~Creer `middleware.ts` centralisee (C-02)~~ CORRIGE
 3. ~~Ajouter verification `isActive` dans `requireAuth()` (C-06)~~ CORRIGE
 
-### Urgent (P1) — FAIT
+### Urgent (P1) — FAIT (7/7)
 4. ~~Ajouter rate limiting sur login + catch-all auth (C-03)~~ CORRIGE
 5. ~~Valider signature Twilio sur webhook WhatsApp (C-04)~~ CORRIGE
 6. ~~Corriger les injections de commandes backup (C-05)~~ CORRIGE
-7. Corriger les role checks portail→admin (M-01, M-02)
+7. ~~Corriger les role checks portail→admin (M-01, M-02)~~ CORRIGE
 
 ### Important (P2) — 1/4 FAIT
 8. ~~Ajouter headers de securite dans `next.config.js` (M-03)~~ CORRIGE
@@ -285,6 +287,7 @@ Les corrections implementees couvrent :
 | Date | Issues corrigees | Fichiers modifies |
 |------|-----------------|-------------------|
 | 2026-02-26 | C-01 a C-06, M-03, M-12, M-16, L-10 | 21 fichiers modifies/crees + 56 routes maj pour `Compte désactivé` |
+| 2026-02-26 | M-01, M-02 | 38 routes GET → requireRole + 4 routes ecriture + 2 routes self-service + 6 imports corriges |
 
 ### Detail des fichiers modifies (2026-02-26)
 
@@ -312,6 +315,19 @@ Les corrections implementees couvrent :
 | `app/api/docs/[...path]/route.ts` | MODIFIE — requireAuth GET | C-01 |
 | `next.config.js` | MODIFIE — security headers | M-03 |
 | 56 routes API | MODIFIE — catch `'Compte désactivé'` pour 401 | C-06 |
+
+### Detail des fichiers modifies — M-01/M-02 (2026-02-26)
+
+| Fichier | Action | Issue |
+|---------|--------|-------|
+| 38 routes GET dashboard | MODIFIE — `requireAuth()` → `requireRole(['admin', 'user'])` | M-01 |
+| `app/api/remplacants/[id]/absences/route.ts` | MODIFIE — GET → `requireAdminOrSelfRemplacant()` | M-01 |
+| `app/api/remplacants/[id]/disponibilites/specifiques/route.ts` | MODIFIE — GET → `requireAdminOrSelfRemplacant()` | M-01 |
+| `app/api/remplacants/[id]/remarques/route.ts` | MODIFIE — POST → `requireRole(['admin', 'user'])` | M-02 |
+| `app/api/collaborateurs/[id]/remarques/route.ts` | MODIFIE — POST → `requireRole(['admin', 'user'])` | M-02 |
+| `app/api/whatsapp/route.ts` | MODIFIE — POST → `requireRole(['admin', 'user'])` | M-02 |
+| `app/api/whatsapp/responses/[id]/route.ts` | MODIFIE — DELETE → `requireRole(['admin', 'user'])` | M-02 |
+| 6 fichiers imports | MODIFIE — import `requireAuth` → `requireRole` | M-01 |
 
 ---
 

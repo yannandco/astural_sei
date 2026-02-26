@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const data = await db
       .select()

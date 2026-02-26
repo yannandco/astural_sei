@@ -6,7 +6,7 @@ import { requireAuth, requireRole } from '@/lib/auth/server'
 
 export async function GET() {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
     const data = await db
       .select()
       .from(sectors)

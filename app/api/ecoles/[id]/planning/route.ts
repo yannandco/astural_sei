@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, gte, lte } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { collaborateurEcoles, collaborateurs, remplacantAffectations, remplacants } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 // GET - Planning de l'école (collaborateurs présents + remplacements)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const ecoleId = parseInt(id)

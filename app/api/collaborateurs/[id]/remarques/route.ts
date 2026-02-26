@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { collaborateurRemarques, users } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const collaborateurId = parseInt(id)
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { user } = await requireAuth()
+    const { user } = await requireRole(['admin', 'user'])
 
     const { id } = await params
     const collaborateurId = parseInt(id)

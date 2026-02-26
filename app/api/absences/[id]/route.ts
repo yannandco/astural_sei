@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, or, lte, gte } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { absences, collaborateurs, remplacants, remplacantAffectations, collaborateurEcoles, ecoles, whatsappMessages } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 import { computeEcoleUrgency, computeOverallUrgency, type EcoleUrgency } from '@/lib/urgency'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const absenceId = parseInt(id, 10)

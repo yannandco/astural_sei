@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 import { db } from '@/lib/db'
 import { whatsappMessages } from '@/lib/db/schema'
 
@@ -10,7 +10,7 @@ interface JourPresence {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireAuth()
+    const { user } = await requireRole(['admin', 'user'])
 
     const body = await request.json()
     const { recipients, absenceId, dateDebut, dateFin, creneau, collaborateurName, ecoleName, joursPresence } = body as {

@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { whatsappMessages, remplacants } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { searchParams } = new URL(request.url)
     const absenceId = searchParams.get('absenceId')

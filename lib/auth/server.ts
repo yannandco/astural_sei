@@ -102,6 +102,30 @@ export async function requireAdminOrSelfRemplacant(remplacantId: number) {
   throw new Error('Accès non autorisé')
 }
 
+export async function requireAdminOrSelfCollaborateur(collaborateurId: number) {
+  const { user, session } = await requireAuth()
+
+  // Admin or regular user can manage any collaborateur
+  if (user.role === 'admin' || user.role === 'user') {
+    return { user, session }
+  }
+
+  // Self-service: collaborateur managing their own data
+  if (user.role === 'collaborateur') {
+    const [collab] = await db
+      .select({ id: collaborateurs.id })
+      .from(collaborateurs)
+      .where(eq(collaborateurs.userId, user.id))
+      .limit(1)
+
+    if (collab && collab.id === collaborateurId) {
+      return { user, session }
+    }
+  }
+
+  throw new Error('Accès non autorisé')
+}
+
 export async function getPortailUser() {
   const { user, session } = await requirePortailAuth()
 

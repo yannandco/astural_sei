@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFile } from 'fs/promises'
 import path from 'path'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ path: string[] }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
     const { path: segments } = await params
     const filePath = segments.join('/')
 

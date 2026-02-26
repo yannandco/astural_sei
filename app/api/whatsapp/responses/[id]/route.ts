@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { whatsappMessages } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const messageId = parseInt(id)

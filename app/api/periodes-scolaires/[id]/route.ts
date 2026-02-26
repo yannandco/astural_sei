@@ -9,7 +9,7 @@ type RouteParams = { params: Promise<{ id: string }> }
 // GET - Récupérer une période
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const periodeId = parseInt(id)

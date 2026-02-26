@@ -2,21 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { remplacantAffectations, collaborateurs, ecoles, directeurs } from '@/lib/db/schema'
-import { requireAuth, requireRole } from '@/lib/auth/server'
+import { requireAuth, requireRole, requireAdminOrSelfRemplacant } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 // GET - Liste des affectations du remplaçant
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    await requireAdminOrSelfRemplacant(remplacantId)
 
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')

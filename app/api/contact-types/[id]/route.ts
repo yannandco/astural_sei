@@ -9,7 +9,7 @@ type RouteParams = { params: Promise<{ id: string }> }
 // GET - Get single contact type
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
     const { id } = await params
     const typeId = parseInt(id)
 

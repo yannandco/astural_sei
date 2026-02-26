@@ -11,7 +11,7 @@ const etabDirecteurs = alias(directeurs, 'etab_directeurs')
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')

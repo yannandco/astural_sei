@@ -7,7 +7,7 @@ import { requireAuth, requireRole } from '@/lib/auth/server'
 // GET - List all contact types
 export async function GET() {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
     const types = await db
       .select()
       .from(contactTypes)

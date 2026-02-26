@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { collaborateurEcoles, ecoles } from '@/lib/db/schema'
 import { remplacantAffectations } from '@/lib/db/schema/planning'
 import { remplacants } from '@/lib/db/schema/remplacants'
-import { requireAuth } from '@/lib/auth/server'
+import { requireAdminOrSelfCollaborateur } from '@/lib/auth/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,14 +17,14 @@ interface JourPresence {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
-
     const { id } = await params
     const collaborateurId = parseInt(id)
 
     if (isNaN(collaborateurId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    await requireAdminOrSelfCollaborateur(collaborateurId)
 
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')

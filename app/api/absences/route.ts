@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sql, eq, and, or, lte, gte, desc, ilike } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { absences, collaborateurs, remplacants, remplacantAffectations, collaborateurEcoles, ecoles, whatsappMessages } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 import { computeEcoleUrgency, computeOverallUrgency, getUrgencySortValue, type EcoleUrgency } from '@/lib/urgency'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''

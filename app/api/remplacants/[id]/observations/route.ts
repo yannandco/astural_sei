@@ -12,7 +12,7 @@ const observateurRemplacants = alias(remplacants, 'observateur_remplacants')
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { id } = await params
     const remplacantId = parseInt(id)

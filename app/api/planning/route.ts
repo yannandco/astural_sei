@@ -9,12 +9,12 @@ import {
   ecoles,
   absences,
 } from '@/lib/db/schema'
-import { requireAuth } from '@/lib/auth/server'
+import { requireRole } from '@/lib/auth/server'
 
 // GET - Vue globale du planning (tous les remplaçants)
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    await requireRole(['admin', 'user'])
 
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')

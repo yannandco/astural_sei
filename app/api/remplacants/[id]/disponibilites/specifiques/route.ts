@@ -11,14 +11,14 @@ type Creneau = 'matin' | 'apres_midi' | 'journee'
 // GET - Liste des disponibilités spécifiques du remplaçant
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth()
-
     const { id } = await params
     const remplacantId = parseInt(id)
 
     if (isNaN(remplacantId)) {
       return NextResponse.json({ error: 'ID invalide' }, { status: 400 })
     }
+
+    await requireAdminOrSelfRemplacant(remplacantId)
 
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('startDate')
