@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeftIcon, UserGroupIcon, TrashIcon, PlusIcon, XMarkIcon, ChatBubbleLeftIcon, EyeIcon, PencilIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, UserGroupIcon, TrashIcon, PlusIcon, ChatBubbleLeftIcon, EyeIcon, PencilIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import {
   MonthCalendar,
   AbsenceModal,
@@ -20,6 +20,8 @@ import {
 import DisponibiliteModal from '@/components/planning/DisponibiliteModal'
 import type { RemplacantSelectedCell } from '@/components/planning/MonthCalendar'
 import { DatePicker, PhoneInput } from '@/components/ui'
+import RemarqueModal from '@/components/modals/RemarqueModal'
+import SeanceObservationModal from '@/components/modals/SeanceObservationModal'
 
 interface Remarque {
   id: number
@@ -109,12 +111,16 @@ type TabType = 'planning' | 'absences' | 'remplacements' | 'observations' | 'inf
 export default function RemplacantDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const id = params.id as string
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabType>('planning')
+  const initialTab = (searchParams.get('tab') as TabType) || 'planning'
+  const [activeTab, setActiveTab] = useState<TabType>(
+    ['planning', 'absences', 'remplacements', 'observations', 'informations'].includes(initialTab) ? initialTab : 'planning'
+  )
   const [remarques, setRemarques] = useState<Remarque[]>([])
   const [seances, setSeances] = useState<SeanceObservation[]>([])
   const [collaborateurs, setCollaborateurs] = useState<Collaborateur[]>([])
@@ -132,18 +138,7 @@ export default function RemplacantDetailPage() {
   const [affSearch, setAffSearch] = useState('')
 
   const [showAddRemarque, setShowAddRemarque] = useState(false)
-  const [newRemarque, setNewRemarque] = useState('')
   const [showAddSeance, setShowAddSeance] = useState(false)
-
-  // Séance form state
-  const [seanceDate, setSeanceDate] = useState('')
-  const [seanceCreneau, setSeanceCreneau] = useState('matin')
-  const [seanceEcoleId, setSeanceEcoleId] = useState('')
-  const [seanceEcoleSearch, setSeanceEcoleSearch] = useState('')
-  const [seanceObservateurType, setSeanceObservateurType] = useState<'collaborateur' | 'remplacant'>('collaborateur')
-  const [seanceObservateurId, setSeanceObservateurId] = useState('')
-  const [seanceObservateurSearch, setSeanceObservateurSearch] = useState('')
-  const [seanceNote, setSeanceNote] = useState('')
 
   // Planning state
   const [specifiques, setSpecifiques] = useState<DisponibiliteSpecifique[]>([])
@@ -333,19 +328,16 @@ export default function RemplacantDetailPage() {
     }
   }
 
-  const handleAddRemarque = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newRemarque.trim()) return
+  const handleAddRemarque = async (texte: string) => {
     try {
       const res = await fetch(`/api/remplacants/${id}/remarques`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newRemarque }),
+        body: JSON.stringify({ content: texte }),
       })
       if (res.ok) {
         const data = await res.json()
         setRemarques(prev => [data.data, ...prev])
-        setNewRemarque('')
         setShowAddRemarque(false)
       }
     } catch (error) {
@@ -353,42 +345,9 @@ export default function RemplacantDetailPage() {
     }
   }
 
-  const resetSeanceForm = () => {
-    setSeanceDate('')
-    setSeanceCreneau('matin')
-    setSeanceEcoleId('')
-    setSeanceEcoleSearch('')
-    setSeanceObservateurType('collaborateur')
-    setSeanceObservateurId('')
-    setSeanceObservateurSearch('')
-    setSeanceNote('')
-  }
-
-  const handleAddSeance = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!seanceDate || !seanceCreneau || !seanceEcoleId || !seanceObservateurId) return
-    try {
-      const res = await fetch(`/api/remplacants/${id}/observations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: seanceDate,
-          creneau: seanceCreneau,
-          ecoleId: parseInt(seanceEcoleId),
-          observateurType: seanceObservateurType,
-          observateurId: parseInt(seanceObservateurId),
-          note: seanceNote,
-        }),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setSeances(prev => [data.data, ...prev])
-        resetSeanceForm()
-        setShowAddSeance(false)
-      }
-    } catch (error) {
-      console.error('Error adding seance:', error)
-    }
+  const handleSeanceSuccess = (data: { data: unknown }) => {
+    setSeances(prev => [data.data as SeanceObservation, ...prev])
+    setShowAddSeance(false)
   }
 
   const handleRemoveSeance = async (seanceId: number) => {
@@ -615,19 +574,93 @@ export default function RemplacantDetailPage() {
     return filtered
   }, [tabAffectations, affFilter, affSearch, todayStr])
 
-  // Filter écoles by search
-  const filteredEcoles = ecolesList.filter(e => {
-    if (!seanceEcoleSearch.trim()) return true
-    return e.name.toLowerCase().includes(seanceEcoleSearch.toLowerCase())
-  }).slice(0, 10)
+  // Group affectations by absence (same collaborateur + école + contiguous dates)
+  const groupedAffectations = useMemo(() => {
+    if (filteredTabAffectations.length === 0) return []
 
-  // Filter observateurs by search and type
-  const observateurOptions = seanceObservateurType === 'collaborateur' ? collaborateurs : remplacantsList
-  const filteredObservateurs = observateurOptions.filter(p => {
-    if (!seanceObservateurSearch.trim()) return true
-    const search = seanceObservateurSearch.toLowerCase()
-    return p.lastName.toLowerCase().includes(search) || p.firstName.toLowerCase().includes(search)
-  }).slice(0, 10)
+    // Sort by collaborateur, école, date
+    const sorted = [...filteredTabAffectations].sort((a, b) => {
+      if (a.collaborateurId !== b.collaborateurId) return a.collaborateurId - b.collaborateurId
+      if (a.ecoleId !== b.ecoleId) return a.ecoleId - b.ecoleId
+      if (a.motif !== b.motif) return (a.motif || '').localeCompare(b.motif || '')
+      return a.dateDebut.localeCompare(b.dateDebut)
+    })
+
+    type GroupedAff = {
+      ids: number[]
+      collaborateurId: number
+      collaborateurNom: string | null
+      collaborateurPrenom: string | null
+      collaborateurEmail: string | null
+      collaborateurMobilePro: string | null
+      ecoleId: number
+      ecoleNom: string | null
+      directeurNom: string | null
+      directeurPrenom: string | null
+      directeurEmail: string | null
+      directeurPhone: string | null
+      titulairesNoms: string | null
+      titulairesEmails: string | null
+      titulairesPhones: string | null
+      dateDebut: string
+      dateFin: string
+      creneaux: Set<string>
+      uniqueDates: Set<string>
+      motif: string | null
+      isActive: boolean
+    }
+
+    const groups: GroupedAff[] = []
+    let current: GroupedAff | null = null
+
+    for (const aff of sorted) {
+      const isSameGroup = current &&
+        current.collaborateurId === aff.collaborateurId &&
+        current.ecoleId === aff.ecoleId &&
+        current.motif === aff.motif &&
+        // Dates contiguës (≤ 4 jours pour couvrir les weekends + mercredi)
+        (new Date(aff.dateDebut).getTime() - new Date(current.dateFin).getTime()) <= 4 * 86400000
+
+      if (isSameGroup && current) {
+        current.ids.push(aff.id)
+        if (aff.dateFin > current.dateFin) current.dateFin = aff.dateFin
+        if (aff.dateDebut < current.dateDebut) current.dateDebut = aff.dateDebut
+        current.creneaux.add(aff.creneau)
+        current.uniqueDates.add(aff.dateDebut)
+      } else {
+        if (current) groups.push(current)
+        current = {
+          ids: [aff.id],
+          collaborateurId: aff.collaborateurId,
+          collaborateurNom: aff.collaborateurNom,
+          collaborateurPrenom: aff.collaborateurPrenom,
+          collaborateurEmail: aff.collaborateurEmail,
+          collaborateurMobilePro: aff.collaborateurMobilePro,
+          ecoleId: aff.ecoleId,
+          ecoleNom: aff.ecoleNom,
+          directeurNom: aff.directeurNom,
+          directeurPrenom: aff.directeurPrenom,
+          directeurEmail: aff.directeurEmail,
+          directeurPhone: aff.directeurPhone,
+          titulairesNoms: aff.titulairesNoms,
+          titulairesEmails: aff.titulairesEmails,
+          titulairesPhones: aff.titulairesPhones,
+          dateDebut: aff.dateDebut,
+          dateFin: aff.dateFin,
+          creneaux: new Set([aff.creneau]),
+          uniqueDates: new Set([aff.dateDebut]),
+          motif: aff.motif,
+          isActive: aff.isActive,
+        }
+      }
+    }
+    if (current) groups.push(current)
+
+    // Sort groups by dateDebut descending (most recent first)
+    groups.sort((a, b) => b.dateDebut.localeCompare(a.dateDebut))
+
+    return groups
+  }, [filteredTabAffectations])
 
   const getObservateurName = (seance: SeanceObservation) => {
     if (seance.observateurType === 'collaborateur') {
@@ -1161,7 +1194,7 @@ export default function RemplacantDetailPage() {
         <div className="ds-table-container">
           <div className="p-5">
             <h2 className="text-sm font-semibold text-purple-700 uppercase tracking-wider mb-4 pb-2 border-b border-gray-100">
-              Remplacements ({tabAffectationsLoaded ? filteredTabAffectations.length : '...'})
+              Remplacements ({tabAffectationsLoaded ? groupedAffectations.length : '...'})
             </h2>
 
             {/* Filtres */}
@@ -1196,7 +1229,7 @@ export default function RemplacantDetailPage() {
                 <div className="spinner-md mx-auto mb-2"></div>
                 <p className="text-sm text-gray-500">Chargement...</p>
               </div>
-            ) : filteredTabAffectations.length === 0 ? (
+            ) : groupedAffectations.length === 0 ? (
               <p className="text-sm text-gray-500 italic">
                 {tabAffectations.length === 0 ? 'Aucun remplacement' : 'Aucun résultat pour ces filtres'}
               </p>
@@ -1207,61 +1240,34 @@ export default function RemplacantDetailPage() {
                     <tr className="ds-table-header">
                       <th className="ds-table-header-cell">Remplace</th>
                       <th className="ds-table-header-cell">École</th>
-                      <th className="ds-table-header-cell">Directeur</th>
-                      <th className="ds-table-header-cell">Titulaire(s)</th>
-                      <th className="ds-table-header-cell">Créneau</th>
-                      <th className="ds-table-header-cell">Dates</th>
+                      <th className="ds-table-header-cell">Début</th>
+                      <th className="ds-table-header-cell">Fin</th>
+                      <th className="ds-table-header-cell">Durée</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTabAffectations.map((aff) => (
-                      <tr key={aff.id} className="ds-table-row">
+                    {groupedAffectations.map((grp) => (
+                      <tr
+                        key={grp.ids.join('-')}
+                        className="ds-table-row cursor-pointer hover:bg-purple-50"
+                        onClick={() => router.push(`/remplacants/${id}/remplacement?ids=${grp.ids.join(',')}`)}
+                      >
                         <td className="ds-table-cell">
-                          {aff.collaborateurPrenom || aff.collaborateurNom ? (
-                            <div>
-                              <div>{aff.collaborateurPrenom} {aff.collaborateurNom}</div>
-                              <div className="text-xs text-gray-500 space-y-0.5">
-                                {aff.collaborateurEmail && <div><a href={`mailto:${aff.collaborateurEmail}`} className="hover:underline">{aff.collaborateurEmail}</a></div>}
-                                {aff.collaborateurMobilePro && <div><a href={`tel:${aff.collaborateurMobilePro}`} className="hover:underline">{aff.collaborateurMobilePro}</a></div>}
-                              </div>
-                            </div>
+                          {grp.collaborateurPrenom || grp.collaborateurNom ? (
+                            <div>{grp.collaborateurPrenom} {grp.collaborateurNom}</div>
                           ) : <span className="text-gray-400">-</span>}
                         </td>
                         <td className="ds-table-cell">
-                          <Link href={`/ecoles/${aff.ecoleId}`} className="text-purple-600 hover:underline font-medium">
-                            {aff.ecoleNom}
-                          </Link>
-                        </td>
-                        <td className="ds-table-cell">
-                          {aff.directeurPrenom || aff.directeurNom ? (
-                            <div>
-                              <div>{aff.directeurPrenom} {aff.directeurNom}</div>
-                              <div className="text-xs text-gray-500 space-y-0.5">
-                                {aff.directeurEmail && <div><a href={`mailto:${aff.directeurEmail}`} className="hover:underline">{aff.directeurEmail}</a></div>}
-                                {aff.directeurPhone && <div><a href={`tel:${aff.directeurPhone}`} className="hover:underline">{aff.directeurPhone}</a></div>}
-                              </div>
-                            </div>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="ds-table-cell">
-                          {aff.titulairesNoms ? (
-                            <div>
-                              <div>{aff.titulairesNoms}</div>
-                              <div className="text-xs text-gray-500 space-y-0.5">
-                                {aff.titulairesEmails && <div>{aff.titulairesEmails.split(', ').map((e, i) => <span key={i}>{i > 0 && ', '}<a href={`mailto:${e}`} className="hover:underline">{e}</a></span>)}</div>}
-                                {aff.titulairesPhones && <div>{aff.titulairesPhones.split(', ').map((p, i) => <span key={i}>{i > 0 && ', '}<a href={`tel:${p}`} className="hover:underline">{p}</a></span>)}</div>}
-                              </div>
-                            </div>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="ds-table-cell">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
-                            {CRENEAU_LABELS[aff.creneau as Creneau] || aff.creneau}
-                          </span>
+                          {grp.ecoleNom || <span className="text-gray-400">-</span>}
                         </td>
                         <td className="ds-table-cell whitespace-nowrap">
-                          {new Date(aff.dateDebut).toLocaleDateString('fr-FR')}
-                          {aff.dateDebut !== aff.dateFin && ` - ${new Date(aff.dateFin).toLocaleDateString('fr-FR')}`}
+                          {new Date(grp.dateDebut).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td className="ds-table-cell whitespace-nowrap">
+                          {new Date(grp.dateFin).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td className="ds-table-cell whitespace-nowrap text-gray-600">
+                          {grp.ids.length} cr. / {grp.uniqueDates.size} j.
                         </td>
                       </tr>
                     ))}
@@ -1303,202 +1309,22 @@ export default function RemplacantDetailPage() {
       />
 
       {/* Add Remarque Modal */}
-      {showAddRemarque && (
-        <div className="modal-overlay">
-          <div className="modal-container max-w-lg">
-            <div className="modal-header">
-              <div className="modal-header-content">
-                <h3 className="modal-title">Nouvelle remarque</h3>
-                <button onClick={() => setShowAddRemarque(false)} className="modal-close-button"><XMarkIcon className="h-5 w-5" /></button>
-              </div>
-            </div>
-            <form onSubmit={handleAddRemarque}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Remarque *</label>
-                  <textarea
-                    required
-                    value={newRemarque}
-                    onChange={(e) => setNewRemarque(e.target.value)}
-                    className="form-input"
-                    rows={4}
-                    placeholder="Saisissez votre remarque..."
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <div></div>
-                <div className="modal-footer-actions">
-                  <button type="button" onClick={() => setShowAddRemarque(false)} className="btn btn-secondary">Annuler</button>
-                  <button type="submit" className="btn btn-primary">Ajouter</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <RemarqueModal
+        isOpen={showAddRemarque}
+        onClose={() => setShowAddRemarque(false)}
+        onSubmit={handleAddRemarque}
+      />
 
       {/* Add Séance Modal */}
-      {showAddSeance && (
-        <div className="modal-overlay">
-          <div className="modal-container max-w-lg">
-            <div className="modal-header">
-              <div className="modal-header-content">
-                <h3 className="modal-title">Ajouter une séance d&apos;observation</h3>
-                <button onClick={() => { setShowAddSeance(false); resetSeanceForm(); }} className="modal-close-button"><XMarkIcon className="h-5 w-5" /></button>
-              </div>
-            </div>
-            <form onSubmit={handleAddSeance}>
-              <div className="modal-body space-y-4">
-                {/* Date */}
-                <div className="form-group">
-                  <label className="form-label">Date *</label>
-                  <DatePicker value={seanceDate} onChange={setSeanceDate} />
-                </div>
-
-                {/* Créneau */}
-                <div className="form-group">
-                  <label className="form-label">Créneau *</label>
-                  <select value={seanceCreneau} onChange={(e) => setSeanceCreneau(e.target.value)} className="form-input">
-                    <option value="matin">Matin</option>
-                    <option value="apres_midi">Après-midi</option>
-                    <option value="journee">Journée</option>
-                  </select>
-                </div>
-
-                {/* École */}
-                <div className="form-group">
-                  <label className="form-label">École *</label>
-                  {seanceEcoleId ? (
-                    <div className="p-2 bg-purple-50 rounded-md flex items-center justify-between">
-                      <span className="text-sm font-medium text-purple-700">
-                        {ecolesList.find(e => e.id === parseInt(seanceEcoleId))?.name}
-                      </span>
-                      <button type="button" onClick={() => setSeanceEcoleId('')} className="text-purple-500 hover:text-purple-700">
-                        <XMarkIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        value={seanceEcoleSearch}
-                        onChange={(e) => setSeanceEcoleSearch(e.target.value)}
-                        className="form-input"
-                        placeholder="Rechercher une école..."
-                      />
-                      {seanceEcoleSearch.trim() && filteredEcoles.length > 0 && (
-                        <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto">
-                          {filteredEcoles.map((e) => (
-                            <button
-                              key={e.id}
-                              type="button"
-                              onClick={() => { setSeanceEcoleId(String(e.id)); setSeanceEcoleSearch(''); }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0"
-                            >
-                              {e.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Type observateur */}
-                <div className="form-group">
-                  <label className="form-label">Type d&apos;observateur *</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { setSeanceObservateurType('collaborateur'); setSeanceObservateurId(''); setSeanceObservateurSearch(''); }}
-                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                        seanceObservateurType === 'collaborateur'
-                          ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      Collaborateur
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setSeanceObservateurType('remplacant'); setSeanceObservateurId(''); setSeanceObservateurSearch(''); }}
-                      className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
-                        seanceObservateurType === 'remplacant'
-                          ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      Remplaçant
-                    </button>
-                  </div>
-                </div>
-
-                {/* Observateur */}
-                <div className="form-group">
-                  <label className="form-label">Observateur *</label>
-                  {seanceObservateurId ? (
-                    <div className="p-2 bg-purple-50 rounded-md flex items-center justify-between">
-                      <span className="text-sm font-medium text-purple-700">
-                        {observateurOptions.find(p => p.id === parseInt(seanceObservateurId))?.firstName} {observateurOptions.find(p => p.id === parseInt(seanceObservateurId))?.lastName}
-                      </span>
-                      <button type="button" onClick={() => setSeanceObservateurId('')} className="text-purple-500 hover:text-purple-700">
-                        <XMarkIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        value={seanceObservateurSearch}
-                        onChange={(e) => { setSeanceObservateurSearch(e.target.value); setSeanceObservateurId(''); }}
-                        className="form-input"
-                        placeholder="Nom ou prénom..."
-                      />
-                      {seanceObservateurSearch.trim() && filteredObservateurs.length > 0 && (
-                        <div className="mt-1 border border-gray-200 rounded-md max-h-48 overflow-y-auto">
-                          {filteredObservateurs.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => { setSeanceObservateurId(String(p.id)); setSeanceObservateurSearch(''); }}
-                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-b-0"
-                            >
-                              <span className="font-medium">{p.firstName} {p.lastName}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {seanceObservateurSearch.trim() && filteredObservateurs.length === 0 && (
-                        <p className="text-sm text-gray-500 mt-1">Aucun résultat.</p>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Note */}
-                <div className="form-group">
-                  <label className="form-label">Note</label>
-                  <textarea
-                    value={seanceNote}
-                    onChange={(e) => setSeanceNote(e.target.value)}
-                    className="form-input"
-                    rows={2}
-                    placeholder="Note optionnelle..."
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <div></div>
-                <div className="modal-footer-actions">
-                  <button type="button" onClick={() => { setShowAddSeance(false); resetSeanceForm(); }} className="btn btn-secondary">Annuler</button>
-                  <button type="submit" disabled={!seanceDate || !seanceEcoleId || !seanceObservateurId} className="btn btn-primary">Ajouter</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <SeanceObservationModal
+        isOpen={showAddSeance}
+        onClose={() => setShowAddSeance(false)}
+        remplacantId={id}
+        collaborateurs={collaborateurs}
+        remplacantsList={remplacantsList}
+        ecolesList={ecolesList}
+        onSuccess={handleSeanceSuccess}
+      />
     </div>
   )
 }

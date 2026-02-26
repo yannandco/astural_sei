@@ -62,6 +62,7 @@ interface CollaborateurMonthCalendarProps {
   onRemplacementClick?: (remplacement: Remplacement) => void
   onCellClick?: (info: CellClickInfo) => void
   onSelectionAction?: (action: 'absence' | 'remplacement' | 'supprimer_absence' | 'supprimer_remplacement', cells: SelectedCell[]) => void
+  portailMode?: boolean
 }
 
 const MOIS_LABELS = [
@@ -88,6 +89,7 @@ export default function CollaborateurMonthCalendar({
   onRemplacementClick,
   onCellClick,
   onSelectionAction,
+  portailMode = false,
 }: CollaborateurMonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const ref = initialDate || new Date()
@@ -511,7 +513,7 @@ export default function CollaborateurMonthCalendar({
               {selectedCells.size} créneau{selectedCells.size > 1 ? 'x' : ''} sélectionné{selectedCells.size > 1 ? 's' : ''}
             </span>
             <div className="flex-1" />
-            {hasAbsenceCells && (
+            {!portailMode && hasAbsenceCells && (
               <button
                 type="button"
                 className="px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
@@ -520,7 +522,7 @@ export default function CollaborateurMonthCalendar({
                 Supprimer les absences
               </button>
             )}
-            {hasRemplacementCells && (
+            {!portailMode && hasRemplacementCells && (
               <button
                 type="button"
                 className="px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors"
@@ -536,13 +538,15 @@ export default function CollaborateurMonthCalendar({
             >
               Déclarer une absence
             </button>
-            <button
-              type="button"
-              className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
-              onClick={() => onSelectionAction('remplacement', selectedCellsArray)}
-            >
-              Annoncer un remplacement
-            </button>
+            {!portailMode && (
+              <button
+                type="button"
+                className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                onClick={() => onSelectionAction('remplacement', selectedCellsArray)}
+              >
+                Annoncer un remplacement
+              </button>
+            )}
             <button
               type="button"
               className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
