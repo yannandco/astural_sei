@@ -1,36 +1,53 @@
-import { cookies } from 'next/headers'
+import { headers } from 'next/headers'
 import { cache } from 'react'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { collaborateurs, remplacants } from '@/lib/db/schema'
-import { lucia } from './lucia'
-import type { Session, User } from 'lucia'
+import { auth } from '.'
+
+export type AuthUser = {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'user' | 'collaborateur' | 'remplacant'
+  isActive: boolean
+}
+
+export type AuthSession = {
+  id: string
+  userId: string
+  token: string
+  expiresAt: Date
+}
 
 export const validateRequest = cache(
-  async (): Promise<{ user: User; session: Session } | { user: null; session: null }> => {
-    const cookieStore = await cookies()
-    const sessionId = cookieStore.get(lucia.sessionCookieName)?.value ?? null
+  async (): Promise<
+    { user: AuthUser; session: AuthSession } | { user: null; session: null }
+  > => {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+      query: { disableCookieCache: true },
+    })
 
-    if (!sessionId) {
+    if (!session) {
       return { user: null, session: null }
     }
 
-    const result = await lucia.validateSession(sessionId)
-
-    try {
-      if (result.session && result.session.fresh) {
-        const sessionCookie = lucia.createSessionCookie(result.session.id)
-        cookieStore.set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes)
-      }
-      if (!result.session) {
-        const sessionCookie = lucia.createBlankSessionCookie()
-        cookieStore.set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes)
-      }
-    } catch {
-      // Ignore cookie errors in edge cases
+    return {
+      user: {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        role: ((session.user as Record<string, unknown>).role as AuthUser['role']) || 'user',
+        isActive: (session.user as Record<string, unknown>).isActive as boolean ?? true,
+      },
+      session: {
+        id: session.session.id,
+        userId: session.session.userId,
+        token: session.session.token,
+        expiresAt: session.session.expiresAt,
+      },
     }
-
-    return result
   }
 )
 
@@ -38,6 +55,9 @@ export async function requireAuth() {
   const { user, session } = await validateRequest()
   if (!user || !session) {
     throw new Error('Non authentifié')
+  }
+  if (!user.isActive) {
+    throw new Error('Compte désactivé')
   }
   return { user, session }
 }

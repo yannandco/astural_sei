@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { requireAuth } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ path: string[] }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    await requireAuth()
     const { path: segments } = await params
     const filePath = segments.join('/')
 
@@ -30,6 +32,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: { path: filePath, content } })
   } catch (error) {
     console.error('Error reading doc:', error)
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return NextResponse.json({ error: 'Fichier non trouvé' }, { status: 404 })
     }

@@ -1,5 +1,5 @@
 import { db } from '../lib/db'
-import { users } from '../lib/db/schema'
+import { users, account } from '../lib/db/schema'
 import { hash } from '@node-rs/argon2'
 
 async function createAdmin() {
@@ -7,7 +7,12 @@ async function createAdmin() {
   const password = process.argv[3] || 'admin123'
   const name = process.argv[4] || 'admin'
 
-  const hashedPassword = await hash(password)
+  const hashedPassword = await hash(password, {
+    memoryCost: 19456,
+    timeCost: 2,
+    outputLen: 32,
+    parallelism: 1,
+  })
 
   try {
     const [user] = await db
@@ -15,11 +20,19 @@ async function createAdmin() {
       .values({
         name,
         email,
-        password: hashedPassword,
         role: 'admin',
         isActive: true,
       })
       .returning()
+
+    // Créer l'entrée account (Better Auth credential provider)
+    await db.insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: user.id,
+      providerId: 'credential',
+      userId: user.id,
+      password: hashedPassword,
+    })
 
     console.log('Admin created:', user.email)
     process.exit(0)

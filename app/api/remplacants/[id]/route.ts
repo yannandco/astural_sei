@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     console.error('Error fetching remplacant:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -106,7 +106,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -139,7 +139,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

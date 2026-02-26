@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verify } from '@node-rs/argon2'
+import { headers } from 'next/headers'
 import { eq, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
-import { lucia } from '@/lib/auth/lucia'
+import { auth } from '@/lib/auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    if (!checkRateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Trop de tentatives. Réessayez dans 15 minutes.' },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const { email, password } = body
 
@@ -39,30 +47,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify password
-    const validPassword = await verify(user.password, password)
-    if (!validPassword) {
+    // Sign in via Better Auth using the user's actual email
+    const result = await auth.api.signInEmail({
+      body: { email: user.email, password },
+      headers: await headers(),
+    })
+
+    if (!result) {
       return NextResponse.json(
         { error: 'Identifiants invalides' },
         { status: 401 }
       )
     }
 
-    // Create session
-    const session = await lucia.createSession(user.id, {})
-    const sessionCookie = lucia.createSessionCookie(session.id)
-
     // Update last login
     await db
       .update(users)
       .set({ lastLoginAt: new Date() })
       .where(eq(users.id, user.id))
-
-    const cookieStore = await cookies()
-    cookieStore.set(sessionCookie.name, sessionCookie.value, {
-      ...sessionCookie.attributes,
-      httpOnly: true,
-    })
 
     return NextResponse.json({
       success: true,
@@ -74,6 +76,13 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
+    // Better Auth throws on invalid credentials
+    if (error instanceof Error && error.message?.includes('Invalid')) {
+      return NextResponse.json(
+        { error: 'Identifiants invalides' },
+        { status: 401 }
+      )
+    }
     console.error('Login error:', error)
     return NextResponse.json(
       { error: 'Erreur serveur' },

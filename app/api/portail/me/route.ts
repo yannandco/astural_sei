@@ -152,7 +152,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error fetching portail me:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {

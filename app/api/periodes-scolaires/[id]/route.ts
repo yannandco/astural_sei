@@ -31,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: periode })
   } catch (error) {
     console.error('Error fetching période:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: updated })
   } catch (error) {
     console.error('Error updating période:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
@@ -111,7 +111,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: deleted })
   } catch (error) {
     console.error('Error deleting période:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {

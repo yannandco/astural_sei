@@ -348,6 +348,10 @@ export default function CollaborateurMonthCalendar({
                     const hasPresence = presencesList.length > 0
                     const { isVacances, nom: vacancesNom } = isDateInVacances(dateStr)
 
+                    const cellKey = `${dateStr}:${creneau}`
+                    // When highlightCells is provided (absence context), only cells in the set are interactive
+                    const isInAbsencePeriod = !highlightCells || highlightCells.has(cellKey)
+
                     let bgColor = 'bg-gray-50 border-gray-200'
                     let textColor = 'text-gray-400'
                     let isClickable = false
@@ -360,31 +364,32 @@ export default function CollaborateurMonthCalendar({
                       if (absence!.isRemplacee && cellRemplacements.length > 0) {
                         bgColor = 'bg-purple-100 border-purple-300'
                         textColor = 'text-purple-700'
-                        isClickable = !!(onSelectionAction || onRemplacementClick)
+                        isClickable = isInAbsencePeriod && !!(onSelectionAction || onRemplacementClick)
                       } else {
                         bgColor = 'bg-red-200 border-red-400'
                         textColor = 'text-red-800'
-                        isClickable = !!(onSelectionAction || onCellClick)
+                        isClickable = isInAbsencePeriod && !!(onSelectionAction || onCellClick)
                       }
                     } else if (showRemplacement) {
                       bgColor = 'bg-purple-100 border-purple-300'
                       textColor = 'text-purple-700'
-                      isClickable = !!(onSelectionAction || onRemplacementClick)
+                      isClickable = isInAbsencePeriod && !!(onSelectionAction || onRemplacementClick)
                     } else if (isVacances) {
                       bgColor = 'bg-amber-50 border-amber-200'
                       textColor = 'text-amber-600'
                     } else if (hasPresence) {
                       bgColor = 'bg-green-50 border-green-200'
                       textColor = 'text-green-700'
-                      isClickable = !!(onSelectionAction || onCellClick)
+                      isClickable = isInAbsencePeriod && !!(onSelectionAction || onCellClick)
                     }
 
-                    const cellKey = `${dateStr}:${creneau}`
                     const isSelected = selectedCells.has(cellKey)
                     const isHighlighted = highlightCells?.has(cellKey)
                     const selectionClass = isSelected ? 'ring-2 ring-purple-500 ring-offset-1' : ''
                     const highlightClass = isHighlighted && !isSelected ? 'ring-2 ring-blue-400 ring-offset-1' : ''
                     const clickableClass = isClickable ? `cursor-pointer ${!isSelected && !isHighlighted ? 'hover:ring-2 hover:ring-purple-400' : ''}` : ''
+                    // Dim cells outside the absence period when highlightCells is provided
+                    const dimClass = highlightCells && !isInAbsencePeriod ? 'opacity-30' : ''
 
                     const todayBorder = isToday
                       ? creneauIndex === 0
@@ -399,13 +404,13 @@ export default function CollaborateurMonthCalendar({
                     return (
                       <td key={`${weekIndex}-${jour}-${creneau}`} className={`p-1 pb-2 ${creneauIndex === 0 ? 'pr-0.5' : 'pl-0.5'}`}>
                         <div className={`relative ${todayBorder}`}>
-                          <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'}`}>
+                          <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isToday ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 shadow-sm ring-1 ring-gray-200'} ${dimClass}`}>
                             {date.getDate()}
                           </div>
                           <div
                             className={`
                               h-[64px] rounded border flex flex-col justify-end items-start pt-5 pb-1 px-1
-                              ${bgColor} ${textColor} ${clickableClass} ${selectionClass} ${highlightClass}
+                              ${bgColor} ${textColor} ${clickableClass} ${selectionClass} ${highlightClass} ${dimClass}
                             `}
                             title={
                               showAbsence

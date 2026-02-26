@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { results, sent, failed } })
   } catch (error) {
     console.error('Error sending WhatsApp messages:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

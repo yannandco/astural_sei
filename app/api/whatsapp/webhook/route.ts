@@ -2,12 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { whatsappMessages } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
+import twilio from 'twilio'
 
 // Twilio sends webhook as POST with form-urlencoded body
-// No auth check — this is called by Twilio, not by a user
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
+
+    // Validate Twilio signature
+    const signature = request.headers.get('x-twilio-signature') || ''
+    const params = Object.fromEntries(formData.entries()) as Record<string, string>
+    const authToken = process.env.TWILIO_AUTH_TOKEN
+    if (authToken) {
+      const isValid = twilio.validateRequest(authToken, signature, request.url, params)
+      if (!isValid) {
+        return new NextResponse('<Response></Response>', {
+          status: 403,
+          headers: { 'Content-Type': 'text/xml' },
+        })
+      }
+    }
 
     const from = formData.get('From')?.toString() || ''     // whatsapp:+41791234567
     const body = formData.get('Body')?.toString()?.trim() || ''

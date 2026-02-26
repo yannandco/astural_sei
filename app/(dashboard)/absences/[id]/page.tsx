@@ -126,12 +126,23 @@ interface ReplacementEntry {
   ecoleName: string
 }
 
+interface RemplacantAbsenceData {
+  id: number
+  remplacantId: number
+  dateDebut: string
+  dateFin: string
+  creneau: Creneau
+  motif: string
+  motifDetails: string | null
+}
+
 interface PlanningRemplacantData {
   id: number
   lastName: string
   firstName: string
   specifiques: DisponibiliteSpecifique[]
   affectations: Affectation[]
+  absences: RemplacantAbsenceData[]
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -462,6 +473,8 @@ export default function AbsenceDetailPage() {
   }, [computedEntries, absenceRemplacements])
 
   // Compute availability for all remplaçants (for badges in sidebar) — only unreplaced slots
+  // A remplaçant is "available" only if they have an explicit disponibilite_specifique entry
+  // journee entries count as 2 créneaux (matin + apres_midi)
   const remplacantAvailabilityMap = useMemo(() => {
     if (remplacantPlanningData.length === 0 || unreplacedEntries.length === 0) return new Map<number, { available: number; total: number }>()
 
@@ -469,18 +482,23 @@ export default function AbsenceDetailPage() {
     const map = new Map<number, { available: number; total: number }>()
 
     for (const r of remplacantPlanningData) {
+      const rAbsences = r.absences?.map(a => ({ ...a, type: 'remplacant' as const })) || []
       let availableCount = 0
+      let totalCount = 0
       for (const entry of unreplacedEntries) {
         if (entry.creneau === 'journee') {
-          const m = calculateCellStatus(entry.date, 'matin', r.specifiques, r.affectations)
-          const a = calculateCellStatus(entry.date, 'apres_midi', r.specifiques, r.affectations)
-          if (isAvail(m.status) && isAvail(a.status)) availableCount++
+          totalCount += 2
+          const m = calculateCellStatus(entry.date, 'matin', r.specifiques, r.affectations, rAbsences)
+          const a = calculateCellStatus(entry.date, 'apres_midi', r.specifiques, r.affectations, rAbsences)
+          if (isAvail(m.status)) availableCount++
+          if (isAvail(a.status)) availableCount++
         } else {
-          const { status } = calculateCellStatus(entry.date, entry.creneau, r.specifiques, r.affectations)
+          totalCount += 1
+          const { status } = calculateCellStatus(entry.date, entry.creneau, r.specifiques, r.affectations, rAbsences)
           if (isAvail(status)) availableCount++
         }
       }
-      map.set(r.id, { available: availableCount, total: unreplacedEntries.length })
+      map.set(r.id, { available: availableCount, total: totalCount })
     }
 
     return map
@@ -505,20 +523,23 @@ export default function AbsenceDetailPage() {
     const rempl = remplacantPlanningData.find(r => r.id === selectedSidebarRemplacantId)
     if (!rempl) return null
 
+    const rAbsences = rempl.absences?.map(a => ({ ...a, type: 'remplacant' as const })) || []
     const map = new Map<string, { available: number; total: number }>()
     const isAvail = (s: string) => s === 'disponible_specifique'
 
     for (const entry of unreplacedEntries) {
       const key = `${entry.jour}:${entry.creneau}:${entry.ecoleName}`
       const current = map.get(key) || { available: 0, total: 0 }
-      current.total++
 
       if (entry.creneau === 'journee') {
-        const m = calculateCellStatus(entry.date, 'matin', rempl.specifiques, rempl.affectations)
-        const a = calculateCellStatus(entry.date, 'apres_midi', rempl.specifiques, rempl.affectations)
-        if (isAvail(m.status) && isAvail(a.status)) current.available++
+        current.total += 2
+        const m = calculateCellStatus(entry.date, 'matin', rempl.specifiques, rempl.affectations, rAbsences)
+        const a = calculateCellStatus(entry.date, 'apres_midi', rempl.specifiques, rempl.affectations, rAbsences)
+        if (isAvail(m.status)) current.available++
+        if (isAvail(a.status)) current.available++
       } else {
-        const { status } = calculateCellStatus(entry.date, entry.creneau, rempl.specifiques, rempl.affectations)
+        current.total += 1
+        const { status } = calculateCellStatus(entry.date, entry.creneau, rempl.specifiques, rempl.affectations, rAbsences)
         if (isAvail(status)) current.available++
       }
       map.set(key, current)
@@ -580,18 +601,19 @@ export default function AbsenceDetailPage() {
     // Filter unreplaced entries for the selected école
     const entriesForEcole = unreplacedEntries.filter(e => e.ecoleId === ecoleIdNum)
 
-    // Filter to only entries where the remplaçant is actually available
+    // Filter to entries where the remplaçant has no hard conflict (existing affectation or absence)
     const rempl = remplacantPlanningData.find(r => r.id === remplacantId)
-    const isAvail = (s: string) => s === 'disponible_specifique'
+    const isHardConflict = (s: string) => s === 'affecte' || s === 'absent_non_remplace' || s === 'absent_remplace'
+    const rAbsences = rempl?.absences?.map(a => ({ ...a, type: 'remplacant' as const })) || []
     const availableEntries = rempl
       ? entriesForEcole.filter(entry => {
           if (entry.creneau === 'journee') {
-            const m = calculateCellStatus(entry.date, 'matin', rempl.specifiques, rempl.affectations)
-            const a = calculateCellStatus(entry.date, 'apres_midi', rempl.specifiques, rempl.affectations)
-            return isAvail(m.status) && isAvail(a.status)
+            const m = calculateCellStatus(entry.date, 'matin', rempl.specifiques, rempl.affectations, rAbsences)
+            const a = calculateCellStatus(entry.date, 'apres_midi', rempl.specifiques, rempl.affectations, rAbsences)
+            return !isHardConflict(m.status) && !isHardConflict(a.status)
           }
-          const { status } = calculateCellStatus(entry.date, entry.creneau, rempl.specifiques, rempl.affectations)
-          return isAvail(status)
+          const { status } = calculateCellStatus(entry.date, entry.creneau, rempl.specifiques, rempl.affectations, rAbsences)
+          return !isHardConflict(status)
         })
       : entriesForEcole
 

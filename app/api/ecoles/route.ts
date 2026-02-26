@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data })
   } catch (error) {
     console.error('Error fetching ecoles:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

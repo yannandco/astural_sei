@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { users } from '@/lib/db/schema'
+import { users, account } from '@/lib/db/schema'
 import { requireRole } from '@/lib/auth/server'
 import { desc } from 'drizzle-orm'
 import { hash } from '@node-rs/argon2'
+import crypto from 'crypto'
 
 // GET /api/users - Liste tous les utilisateurs
 export async function GET() {
@@ -57,12 +58,13 @@ export async function POST(request: Request) {
       parallelism: 1,
     })
 
+    // Create user
     const [newUser] = await db
       .insert(users)
       .values({
         name,
         email,
-        password: hashedPassword,
+        emailVerified: true,
         role: role || 'user',
       })
       .returning({
@@ -72,6 +74,15 @@ export async function POST(request: Request) {
         role: users.role,
         isActive: users.isActive,
       })
+
+    // Create credential account entry
+    await db.insert(account).values({
+      id: crypto.randomUUID(),
+      userId: newUser.id,
+      accountId: newUser.id,
+      providerId: 'credential',
+      password: hashedPassword,
+    })
 
     return NextResponse.json({ data: newUser }, { status: 201 })
   } catch (error) {

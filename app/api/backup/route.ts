@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/server'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 const BACKUP_DIR = path.join(process.cwd(), 'backups')
 
+const ALLOWED_PG_BINARIES = ['pg_dump', 'psql']
+
 // Find PostgreSQL binaries
 async function findPgBinary(name: string): Promise<string> {
+  if (!ALLOWED_PG_BINARIES.includes(name)) {
+    throw new Error('Binaire non autorisé')
+  }
+
   const possiblePaths = [
     `/opt/homebrew/bin/${name}`,
     `/opt/homebrew/opt/postgresql@16/bin/${name}`,
@@ -23,11 +29,14 @@ async function findPgBinary(name: string): Promise<string> {
     `/usr/bin/${name}`,
   ]
 
-  // Also check Homebrew Cellar
+  // Also check Homebrew Cellar using execFile (no shell injection)
   try {
-    const { stdout } = await execAsync('find /opt/homebrew/Cellar -name "' + name + '" -type f 2>/dev/null | head -1', { shell: '/bin/bash' })
-    if (stdout.trim()) {
-      possiblePaths.unshift(stdout.trim())
+    const { stdout } = await execFileAsync('find', [
+      '/opt/homebrew/Cellar', '-name', name, '-type', 'f',
+    ], { timeout: 5000 })
+    const firstLine = stdout.trim().split('\n')[0]
+    if (firstLine) {
+      possiblePaths.unshift(firstLine)
     }
   } catch {
     // Ignore errors
@@ -105,7 +114,7 @@ export async function GET() {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -139,37 +148,36 @@ export async function POST(request: NextRequest) {
     // Find pg_dump binary
     const pgDumpPath = await findPgBinary('pg_dump')
 
-    // Build pg_dump command with proper flags for clean restore:
-    // --clean: output commands to DROP objects before recreating
-    // --if-exists: use IF EXISTS when dropping
-    // --no-owner: don't output ownership commands
-    // --no-privileges: don't output privilege commands (GRANT/REVOKE)
-    const dumpFlags = `--clean --if-exists --no-owner --no-privileges`
-
-    // Use set -o pipefail to catch errors in piped commands
-    const pgDumpCmd = compress
-      ? `set -o pipefail && PGPASSWORD="${db.password}" "${pgDumpPath}" -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} ${dumpFlags} | gzip > "${filepath}"`
-      : `PGPASSWORD="${db.password}" "${pgDumpPath}" -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} ${dumpFlags} -f "${filepath}"`
+    const pgEnv = { ...process.env, PGPASSWORD: db.password }
 
     console.log('Running pg_dump with path:', pgDumpPath)
 
     try {
-      const { stdout, stderr } = await execAsync(pgDumpCmd, { shell: '/bin/bash', maxBuffer: 50 * 1024 * 1024 })
-      if (stderr) {
-        console.error('pg_dump stderr:', stderr)
-      }
-      if (stdout) {
-        console.log('pg_dump stdout:', stdout)
+      if (compress) {
+        // For compressed backups, we need a shell pipe but pass PGPASSWORD via env
+        const { exec } = await import('child_process')
+        const execAsync = promisify(exec)
+        const pgDumpCmd = `set -o pipefail && "${pgDumpPath}" -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} --clean --if-exists --no-owner --no-privileges | gzip > "${filepath}"`
+        await execAsync(pgDumpCmd, { shell: '/bin/bash', maxBuffer: 50 * 1024 * 1024, env: pgEnv })
+      } else {
+        // Non-compressed: use execFile (no shell)
+        await execFileAsync(pgDumpPath, [
+          '-h', db.host,
+          '-p', db.port,
+          '-U', db.user,
+          '-d', db.database,
+          '--clean', '--if-exists', '--no-owner', '--no-privileges',
+          '-f', filepath,
+        ], { maxBuffer: 50 * 1024 * 1024, env: pgEnv })
       }
     } catch (execError: unknown) {
-      const err = execError as { stderr?: string; message?: string }
-      console.error('pg_dump error:', err)
+      console.error('pg_dump error:', execError)
       // Clean up empty file if created
       try {
         await fs.unlink(filepath)
       } catch {}
       return NextResponse.json({
-        error: `Erreur pg_dump: ${err.stderr || err.message || 'Erreur inconnue'}`
+        error: 'Erreur lors de la sauvegarde de la base de données'
       }, { status: 500 })
     }
 
@@ -184,7 +192,7 @@ export async function POST(request: NextRequest) {
         await fs.unlink(filepath)
       } catch {}
       return NextResponse.json({
-        error: `La sauvegarde a échoué (fichier trop petit: ${stats.size} bytes). Vérifiez la connexion à la base de données.`
+        error: 'La sauvegarde a échoué. Vérifiez la connexion à la base de données.'
       }, { status: 500 })
     }
 
@@ -201,10 +209,10 @@ export async function POST(request: NextRequest) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
-    return NextResponse.json({ error: `Erreur lors de la sauvegarde: ${(error as Error).message}` }, { status: 500 })
+    return NextResponse.json({ error: 'Erreur lors de la sauvegarde' }, { status: 500 })
   }
 }
 

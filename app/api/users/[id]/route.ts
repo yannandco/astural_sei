@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { users } from '@/lib/db/schema'
+import { users, account } from '@/lib/db/schema'
 import { requireRole, validateRequest } from '@/lib/auth/server'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { hash } from '@node-rs/argon2'
 
 type RouteParams = { params: Promise<{ id: string }> }
@@ -58,14 +58,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (body.role !== undefined) updateData.role = body.role
     if (body.isActive !== undefined) updateData.isActive = body.isActive
 
-    // Hash new password if provided
+    // Hash new password if provided — update in account table
     if (body.password) {
-      updateData.password = await hash(body.password, {
+      const hashed = await hash(body.password, {
         memoryCost: 19456,
         timeCost: 2,
         outputLen: 32,
         parallelism: 1,
       })
+      await db
+        .update(account)
+        .set({ password: hashed, updatedAt: new Date() })
+        .where(and(eq(account.userId, id), eq(account.providerId, 'credential')))
     }
 
     updateData.updatedAt = new Date()

@@ -147,7 +147,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    fetch('/api/auth/get-session')
       .then(res => {
         if (!res.ok) {
           router.push('/login')
@@ -163,13 +163,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             return
           }
           setUser(data.user)
+        } else {
+          router.push('/login')
         }
       })
       .catch(() => router.push('/login'))
   }, [router])
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    await fetch('/api/auth/sign-out', { method: 'POST' })
     router.push('/login')
   }
 

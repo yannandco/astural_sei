@@ -8,7 +8,7 @@
 ## Stack
 - **Next.js 15** + React 18, App Router
 - **Drizzle ORM** + PostgreSQL (driver: `postgres`)
-- **Lucia Auth v3** (cookie sessions, Argon2), roles: `admin` / `user`
+- **Better Auth** (cookie sessions, Argon2), roles: `admin` / `user` / `collaborateur` / `remplacant`
 - **Tailwind CSS** with custom DS classes (ds-header, ds-table, modal-*, btn, form-input, status-badge-*)
 - **Heroicons** (`@heroicons/react/24/outline`)
 - **No external component library** — tout est fait en pur Tailwind + classes DS custom
@@ -147,7 +147,8 @@ Titulaire ← titulaire_remplacements (historique)
 | `lib/db/schema/index.ts` | Barrel export tous les schemas |
 | `lib/db/index.ts` | Connexion DB + export `db` |
 | `lib/auth/server.ts` | validateRequest, requireAuth, requireRole |
-| `lib/auth/lucia.ts` | Config Lucia + Drizzle adapter |
+| `lib/auth/index.ts` | Config Better Auth + Drizzle adapter |
+| `lib/auth/client.ts` | Client-side auth (signIn, signOut, getSession) |
 | `app/(dashboard)/layout.tsx` | Sidebar, breadcrumbs, auth check |
 | `drizzle.config.ts` | Config drizzle-kit |
 | `.env` | DATABASE_URL |

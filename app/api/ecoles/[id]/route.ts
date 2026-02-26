@@ -3,12 +3,13 @@ import { eq, count } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { ecoles, etablissements, directeurs, classes, titulaireAffectations, collaborateurEcoles, titulaires } from '@/lib/db/schema'
 import { collaborateurs } from '@/lib/db/schema/collaborateurs'
-import { requireRole } from '@/lib/auth/server'
+import { requireAuth, requireRole } from '@/lib/auth/server'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    await requireAuth()
     const { id } = await params
     const ecoleId = parseInt(id)
 
@@ -86,6 +87,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     console.error('Error fetching ecole:', error)
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }
@@ -129,7 +133,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -162,7 +166,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

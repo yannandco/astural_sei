@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: filteredData })
   } catch (error) {
     console.error('Error fetching vacances scolaires:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error updating vacances cache:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {

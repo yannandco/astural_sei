@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/auth/server'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 const BACKUP_DIR = path.join(process.cwd(), 'backups')
 
+const FILENAME_REGEX = /^backup_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(_[a-zA-Z0-9_-]+)?\.sql(\.gz)?$/
+
 type RouteParams = { params: Promise<{ filename: string }> }
+
+const ALLOWED_PG_BINARIES = ['pg_dump', 'psql']
 
 // Find PostgreSQL binaries
 async function findPgBinary(name: string): Promise<string> {
+  if (!ALLOWED_PG_BINARIES.includes(name)) {
+    throw new Error('Binaire non autorisé')
+  }
+
   const possiblePaths = [
     `/opt/homebrew/bin/${name}`,
     `/opt/homebrew/opt/postgresql@16/bin/${name}`,
@@ -25,11 +34,14 @@ async function findPgBinary(name: string): Promise<string> {
     `/usr/bin/${name}`,
   ]
 
-  // Also check Homebrew Cellar
+  // Also check Homebrew Cellar using execFile (no shell injection)
   try {
-    const { stdout } = await execAsync('find /opt/homebrew/Cellar -name "' + name + '" -type f 2>/dev/null | head -1', { shell: '/bin/bash' })
-    if (stdout.trim()) {
-      possiblePaths.unshift(stdout.trim())
+    const { stdout } = await execFileAsync('find', [
+      '/opt/homebrew/Cellar', '-name', name, '-type', 'f',
+    ], { timeout: 5000 })
+    const firstLine = stdout.trim().split('\n')[0]
+    if (firstLine) {
+      possiblePaths.unshift(firstLine)
     }
   } catch {
     // Ignore errors
@@ -67,8 +79,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { filename } = await params
 
-    // Validate filename (prevent path traversal)
-    if (filename.includes('..') || filename.includes('/')) {
+    // Strict filename validation
+    if (!FILENAME_REGEX.test(filename)) {
       return NextResponse.json({ error: 'Nom de fichier invalide' }, { status: 400 })
     }
 
@@ -96,7 +108,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -110,8 +122,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { filename } = await params
 
-    // Validate filename
-    if (filename.includes('..') || filename.includes('/')) {
+    // Strict filename validation
+    if (!FILENAME_REGEX.test(filename)) {
       return NextResponse.json({ error: 'Nom de fichier invalide' }, { status: 400 })
     }
 
@@ -135,13 +147,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Find psql binary
     const psqlPath = await findPgBinary('psql')
 
-    // First, drop all tables to ensure clean restore
-    // This handles foreign key constraints properly
-    const dropAllTablesCmd = `PGPASSWORD="${db.password}" "${psqlPath}" -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${db.user};"`
+    const pgEnv = { ...process.env, PGPASSWORD: db.password }
 
+    // First, drop all tables to ensure clean restore
     console.log('Dropping all tables...')
     try {
-      await execAsync(dropAllTablesCmd, { shell: '/bin/bash' })
+      await execFileAsync(psqlPath, [
+        '-h', db.host,
+        '-p', db.port,
+        '-U', db.user,
+        '-d', db.database,
+        '-c', `DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${db.user};`,
+      ], { env: pgEnv })
       console.log('Tables dropped successfully')
     } catch (dropError) {
       console.error('Error dropping tables:', dropError)
@@ -149,21 +166,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Build restore command
-    // -v ON_ERROR_STOP=1: stop on first error
-    const psqlFlags = `-v ON_ERROR_STOP=1`
-
-    const restoreCmd = isCompressed
-      ? `gunzip -c "${filepath}" | PGPASSWORD="${db.password}" "${psqlPath}" ${psqlFlags} -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`
-      : `PGPASSWORD="${db.password}" "${psqlPath}" ${psqlFlags} -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database} -f "${filepath}"`
-
     console.log('Executing restore command...')
-    const { stdout, stderr } = await execAsync(restoreCmd, { shell: '/bin/bash', maxBuffer: 50 * 1024 * 1024 })
-
-    if (stderr) {
-      console.error('Restore stderr:', stderr)
-    }
-    if (stdout) {
-      console.log('Restore stdout:', stdout)
+    try {
+      if (isCompressed) {
+        // For compressed files, we need a shell pipe but pass PGPASSWORD via env
+        const restoreCmd = `gunzip -c "${filepath}" | "${psqlPath}" -v ON_ERROR_STOP=1 -h ${db.host} -p ${db.port} -U ${db.user} -d ${db.database}`
+        await execAsync(restoreCmd, { shell: '/bin/bash', maxBuffer: 50 * 1024 * 1024, env: pgEnv })
+      } else {
+        // Non-compressed: use execFile (no shell)
+        await execFileAsync(psqlPath, [
+          '-v', 'ON_ERROR_STOP=1',
+          '-h', db.host,
+          '-p', db.port,
+          '-U', db.user,
+          '-d', db.database,
+          '-f', filepath,
+        ], { maxBuffer: 50 * 1024 * 1024, env: pgEnv })
+      }
+    } catch (restoreError) {
+      console.error('Restore error:', restoreError)
+      return NextResponse.json({ error: 'Erreur lors de la restauration' }, { status: 500 })
     }
 
     return NextResponse.json({ message: 'Restauration effectuée avec succès' })
@@ -172,10 +194,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
-    return NextResponse.json({ error: `Erreur lors de la restauration: ${(error as Error).message}` }, { status: 500 })
+    return NextResponse.json({ error: 'Erreur lors de la restauration' }, { status: 500 })
   }
 }
 
@@ -186,8 +208,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const { filename } = await params
 
-    // Validate filename
-    if (filename.includes('..') || filename.includes('/')) {
+    // Strict filename validation
+    if (!FILENAME_REGEX.test(filename)) {
       return NextResponse.json({ error: 'Nom de fichier invalide' }, { status: 400 })
     }
 
@@ -208,7 +230,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if ((error as Error).message === 'Accès non autorisé') {
       return NextResponse.json({ error: 'Accès non autorisé' }, { status: 403 })
     }
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

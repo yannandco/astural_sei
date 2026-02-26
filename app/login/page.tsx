@@ -26,11 +26,10 @@ export default function LoginPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Erreur de connexion')
+        setError(data.error || 'Identifiants invalides')
         return
       }
 
-      // Redirect based on role
       const role = data.user?.role
       if (role === 'collaborateur' || role === 'remplacant') {
         router.push('/portail')
@@ -71,10 +70,10 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="label">
-                Adresse email
+                Email ou identifiant
               </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field"

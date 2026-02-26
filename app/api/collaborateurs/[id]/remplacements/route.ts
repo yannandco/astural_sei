@@ -78,7 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data })
   } catch (error) {
     console.error('Error fetching remplacements:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating remplacement:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
@@ -308,7 +308,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: updated })
   } catch (error) {
     console.error('Error updating remplacement:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
@@ -362,7 +362,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: deleted })
   } catch (error) {
     console.error('Error deleting remplacement:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {

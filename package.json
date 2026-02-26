@@ -16,14 +16,13 @@
   "dependencies": {
     "@headlessui/react": "^2.2.4",
     "@heroicons/react": "^2.1.1",
-    "@lucia-auth/adapter-drizzle": "^1.1.0",
     "@node-rs/argon2": "^2.0.2",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.51.23",
+    "better-auth": "^1.4.19",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.5.1",
-    "lucia": "^3.2.0",
     "next": "^15.0.3",
     "postgres": "^3.4.4",
     "react": "^18.3.1",
@@ -32,6 +31,7 @@
     "react-hot-toast": "^2.5.2",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "twilio": "^5.12.2",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },

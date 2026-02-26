@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readdir, stat } from 'fs/promises'
 import path from 'path'
+import { requireAuth } from '@/lib/auth/server'
 
 interface DocFile {
   name: string
@@ -42,6 +43,7 @@ async function scanDir(dirPath: string, basePath: string): Promise<DocFile[]> {
 
 export async function GET() {
   try {
+    await requireAuth()
     const projectRoot = process.cwd()
     const files: DocFile[] = []
 
@@ -67,6 +69,9 @@ export async function GET() {
     return NextResponse.json({ data: files })
   } catch (error) {
     console.error('Error listing docs:', error)
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    }
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { hash } from '@node-rs/argon2'
 import { db } from '@/lib/db'
-import { users, collaborateurs } from '@/lib/db/schema'
+import { users, collaborateurs, account } from '@/lib/db/schema'
 import { requireRole } from '@/lib/auth/server'
+import crypto from 'crypto'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -44,7 +45,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     })
   } catch (error) {
     console.error('Error checking collaborateur access:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
@@ -104,7 +105,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Créer le user
-    const hashedPassword = await hash(password)
+    const hashedPassword = await hash(password, {
+      memoryCost: 19456,
+      timeCost: 2,
+      outputLen: 32,
+      parallelism: 1,
+    })
     const name = `${collab.firstName} ${collab.lastName}`
 
     const [newUser] = await db
@@ -112,11 +118,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .values({
         name,
         email,
-        password: hashedPassword,
+        emailVerified: true,
         role: 'collaborateur',
         isActive: true,
       })
       .returning()
+
+    // Create credential account entry
+    await db.insert(account).values({
+      id: crypto.randomUUID(),
+      userId: newUser.id,
+      accountId: newUser.id,
+      providerId: 'credential',
+      password: hashedPassword,
+    })
 
     // Lier au collaborateur
     await db
@@ -129,7 +144,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating collaborateur access:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
@@ -180,7 +195,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data: { success: true } })
   } catch (error) {
     console.error('Error removing collaborateur access:', error)
-    if ((error as Error).message === 'Non authentifié') {
+    if ((error as Error).message === 'Non authentifié' || (error as Error).message === 'Compte désactivé') {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
     }
     if ((error as Error).message === 'Accès non autorisé') {
